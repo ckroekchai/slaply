@@ -1,21 +1,9 @@
-const productCategories = [
-  "Beauty / skincare",
-  "Food / beverage",
-  "Wellness / supplement",
-  "Marketplace / DTC",
-  "Other"
-];
+import { launchStages, priceTiers, productCategories, reportLanguages, salesChannels } from "../../lib/scan-form-options";
 
-const salesChannels = [
-  "Shelf / retail",
-  "Shopee / Lazada",
-  "TikTok",
-  "Website",
-  "OEM",
-  "Other"
-];
+export default async function ScanPage({ searchParams }) {
+  const params = await searchParams;
+  const error = typeof params?.error === "string" ? params.error : "";
 
-export default function ScanPage() {
   return (
     <main id="scan" className="cta page-shell">
       <div className="container cta-grid">
@@ -28,7 +16,9 @@ export default function ScanPage() {
           </p>
         </div>
 
-        <form className="scan-form" action="#" method="post">
+        <form className="scan-form" action="/api/create-scan" method="post" encType="multipart/form-data">
+          {error ? <div className="form-alert">{error}</div> : null}
+
           <div className="dropzone">
             <span className="upload-icon">+</span>
             <strong>Upload your artwork</strong>
@@ -54,6 +44,26 @@ export default function ScanPage() {
 
           <input name="target_customer" placeholder="Target customer" required />
           <input name="main_concern" placeholder="Main concern" required />
+
+          <select name="price_tier" defaultValue="" required>
+            <option value="" disabled>Price tier</option>
+            {priceTiers.map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
+          </select>
+
+          <select name="launch_stage" defaultValue="" required>
+            <option value="" disabled>Launch stage</option>
+            {launchStages.map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
+          </select>
+
+          <select name="language" defaultValue="thai" required>
+            {reportLanguages.map((item) => (
+              <option key={item.value} value={item.value}>{item.label}</option>
+            ))}
+          </select>
 
           <label className="consent-row">
             <input type="checkbox" name="consent" required />

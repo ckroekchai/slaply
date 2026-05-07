@@ -982,6 +982,16 @@
         gap: 10px;
       }
 
+      .form-alert {
+        padding: 13px 14px;
+        border-radius: 16px;
+        background: rgba(255, 59, 48, 0.09);
+        color: rgba(176, 32, 24, 0.94);
+        font-size: 14px;
+        font-weight: 680;
+        line-height: 1.35;
+      }
+
       input,
       select {
         width: 100%;
@@ -1011,6 +1021,52 @@
       .page-shell {
         min-height: 100vh;
         padding: 160px 0 80px;
+      }
+
+      .report-page {
+        display: grid;
+        gap: 28px;
+      }
+
+      .report-page-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 18px;
+        flex-wrap: wrap;
+      }
+
+      .report-page-head h2 {
+        margin: 14px 0 8px;
+        font-size: clamp(44px, 6vw, 76px);
+      }
+
+      .report-page-head p,
+      .report-summary {
+        color: rgba(29, 29, 31, 0.62);
+        font-size: 18px;
+        line-height: 1.45;
+      }
+
+      .report-page-grid {
+        display: grid;
+        grid-template-columns: minmax(280px, 0.9fr) minmax(320px, 1.1fr);
+        gap: 34px;
+        align-items: start;
+      }
+
+      .report-artwork {
+        width: min(440px, 100%);
+        height: auto;
+        aspect-ratio: 1;
+        margin: 0;
+      }
+
+      .report-artwork img {
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: contain;
       }
 
       .dropzone input[type="file"] {
@@ -1147,6 +1203,10 @@
         }
 
         .report-ui {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .report-page-grid {
           grid-template-columns: minmax(0, 1fr);
         }
 
