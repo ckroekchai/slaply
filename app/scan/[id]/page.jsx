@@ -63,10 +63,7 @@ function PaymentBlock({ payment, scanId, reportPrice, autoRevealSeconds = 0 }) {
       <div>
         <span className="eyebrow">Full report</span>
         <h3>Unlock the complete audit</h3>
-        <p>
-          Get prioritized recommendations, clearer action steps, and the full AI visual review for this
-          artwork.
-        </p>
+        <p>Move from preview to the full list of issues, detailed findings, and recommended actions.</p>
       </div>
 
       {payment ? (
@@ -148,9 +145,7 @@ export default async function ReportPage({ params, searchParams }) {
 
           <div className="glass-device report-device">
             <div className="window">
-              <div className="window-bar">
-                {hasPreview ? <div className="window-title">Example Slaply report</div> : null}
-              </div>
+              <div className="window-bar" aria-hidden="true" />
 
               <div className="report-ui">
                 <UploadedArtwork imageUrl={imageUrl} issues={hasPreview ? safeScan.preview.issues : []} />
