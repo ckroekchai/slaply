@@ -5,8 +5,9 @@ import { scanContextSchema, validateUploadFile } from "../../../lib/scan-validat
 export const runtime = "nodejs";
 
 function redirectToScan(request, error) {
-  const url = new URL("/scan", request.url);
+  const url = new URL("/", request.url);
   url.searchParams.set("error", error);
+  url.hash = "scan";
   return NextResponse.redirect(url, { status: 303 });
 }
 
@@ -38,11 +39,6 @@ export async function POST(request) {
   const parsed = scanContextSchema.safeParse({
     email: formData.get("email"),
     product_category: formData.get("product_category"),
-    sales_channel: formData.get("sales_channel"),
-    target_customer: formData.get("target_customer"),
-    price_tier: formData.get("price_tier"),
-    main_concern: formData.get("main_concern"),
-    launch_stage: formData.get("launch_stage"),
     language: formData.get("language"),
     consent: formData.get("consent")
   });
@@ -92,11 +88,11 @@ export async function POST(request) {
     image_url: publicUrlData.publicUrl,
     image_storage_path: storagePath,
     product_category: context.product_category,
-    sales_channel: context.sales_channel,
-    target_customer: context.target_customer,
-    price_tier: context.price_tier,
-    main_concern: context.main_concern,
-    launch_stage: context.launch_stage,
+    sales_channel: null,
+    target_customer: null,
+    price_tier: null,
+    main_concern: null,
+    launch_stage: null,
     language: context.language,
     scan_status: "uploaded",
     payment_status: "unpaid"
@@ -119,7 +115,6 @@ export async function POST(request) {
       event_name: "form_completed",
       event_data: {
         product_category: context.product_category,
-        sales_channel: context.sales_channel,
         language: context.language
       }
     }

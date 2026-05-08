@@ -1,6 +1,6 @@
 # Slaply Phase 1 Next Steps
 
-Current status: static liquid-glass landing page approved in `slaply-design-liquidglass.html`.
+Current status: functional Next.js MVP flow tested locally with mock AI scan, fixed PromptPay QR, and manual admin unlock fallback.
 
 ## Product Goal
 
@@ -34,6 +34,7 @@ This is not a SaaS dashboard. Phase 1 succeeds when real customers can pay for a
    - Next.js app on Vercel
    - Supabase Postgres + Storage
    - OpenAI vision model with strict structured JSON
+   - `MOCK_AI_SCAN=true` keeps the full flow testable before OpenAI billing is enabled
 
 4. Launch constraint
    - No login/dashboard
@@ -86,6 +87,7 @@ Done when: a user can create a scan record from the website.
 ### Milestone 3: AI Preview
 
 - Build `/api/run-ai-scan`
+- Support `MOCK_AI_SCAN=true` and missing `OPENAI_API_KEY` without calling OpenAI
 - Call OpenAI vision with structured JSON schema
 - Validate JSON server-side
 - Save score, readiness level, issues, recommendations, and raw output
@@ -181,7 +183,7 @@ Track at minimum:
 
 ## Next Practical Step
 
-Start with Milestone 1: create the production Next.js app and migrate `slaply-design-liquidglass.html` into the real landing page.
+Deploy the current MVP to Vercel, point `slaply.co` to the deployment, and run a private paid-beta checklist with real artwork.
 
 ## Credentials And Assets Needed Next
 
@@ -194,7 +196,7 @@ Before Milestone 2 can become functional, prepare:
 - Supabase service role key
 - Supabase Storage bucket name for artwork uploads
 - OpenAI API key
-- PromptPay merchant/account details for QR generation
+- Fixed PromptPay QR image and account display name
 - Decision: manual PromptPay verification first, or PromptPay provider with webhook
 - Report sender email: `reports@slaply.co`
 - A private admin password or operator access method for manual unlock
@@ -203,7 +205,11 @@ Before Milestone 2 can become functional, prepare:
 
 - Next.js App Router shell created
 - Approved liquid-glass landing page migrated to `/`
-- Landing CTAs now point to `/scan`
-- Placeholder pages created for `/scan`, `/scan/[id]`, `/success`, and `/admin/unlock`
-- API placeholders created for scan creation, AI scan, scan fetch, payment creation, payment webhook, resend report, and admin unlock
+- Upload form accepts JPG/PNG and required customer context
+- Supabase scan creation and artwork upload are wired
+- Mock AI scan mode works with `MOCK_AI_SCAN=true` or missing `OPENAI_API_KEY`
+- Scan queued and scan report pages render with shared `SiteHeader`
+- Fixed PromptPay QR flow is wired
+- Hidden guidance stays blurred until QR confirmation countdown completes
+- Manual admin unlock route exists for operator fallback
 - `slaply.co`, `THB 399`, and `promptpay_qr` stored in project config

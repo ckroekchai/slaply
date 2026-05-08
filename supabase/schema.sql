@@ -68,6 +68,11 @@ create index if not exists scans_scan_status_idx on public.scans(scan_status);
 create index if not exists events_scan_id_idx on public.events(scan_id);
 create index if not exists payments_scan_id_idx on public.payments(scan_id);
 
+alter table public.customers enable row level security;
+alter table public.scans enable row level security;
+alter table public.payments enable row level security;
+alter table public.events enable row level security;
+
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'packaging-uploads',
@@ -80,4 +85,3 @@ on conflict (id) do update set
   public = excluded.public,
   file_size_limit = excluded.file_size_limit,
   allowed_mime_types = excluded.allowed_mime_types;
-

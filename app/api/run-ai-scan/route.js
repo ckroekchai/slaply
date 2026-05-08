@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { auditJsonSchema, auditResultSchema } from "../../../lib/ai-audit-schema";
+import { buildMockAuditResult, isMockAiScanEnabled, mockAiModel } from "../../../lib/mock-ai-scan";
 import { getStorageBucket, getSupabaseServerClient } from "../../../lib/supabase-server";
 
 export const runtime = "nodejs";
@@ -19,18 +20,25 @@ Boundaries:
 - Return only structured JSON matching the schema.`;
 
 function buildUserPrompt(scan) {
+  const optional = (value) => value || "Not provided";
+
   return `Audit this packaging artwork.
 
 Context:
 - Product category: ${scan.product_category}
-- Sales channel: ${scan.sales_channel}
-- Target customer: ${scan.target_customer}
-- Price tier: ${scan.price_tier}
-- Main concern: ${scan.main_concern}
-- Launch stage: ${scan.launch_stage}
+- Sales channel: ${optional(scan.sales_channel)}
+- Target customer: ${optional(scan.target_customer)}
+- Price tier: ${optional(scan.price_tier)}
+- Main concern: ${optional(scan.main_concern)}
+- Launch stage: ${optional(scan.launch_stage)}
 - Report language: ${scan.language}
 
-Score honestly. Prioritize issues that can affect commercial visual communication before production or launch.`;
+Score honestly. Prioritize issues that can affect commercial visual communication before production or launch.
+Include paid-report-ready conversion recommendations, priority fixes, and concise sample report content.`;
+}
+
+function getLiveModel() {
+  return process.env.OPENAI_VISION_MODEL || "gpt-4.1-mini";
 }
 
 function wantsHtmlRedirect(request) {
@@ -88,12 +96,9 @@ export async function POST(request) {
     return NextResponse.json({ ok: false, error: "Missing scan_id." }, { status: 400 });
   }
 
-  if (!process.env.OPENAI_API_KEY) {
-    return NextResponse.json({ ok: false, error: "Missing OPENAI_API_KEY." }, { status: 500 });
-  }
-
   const supabase = getSupabaseServerClient();
-  const model = process.env.OPENAI_VISION_MODEL || "gpt-4.1-mini";
+  const useMock = isMockAiScanEnabled();
+  const model = useMock ? mockAiModel : getLiveModel();
 
   const { data: scan, error: scanError } = await supabase
     .from("scans")
@@ -114,10 +119,52 @@ export async function POST(request) {
     scan_id: scanId,
     customer_email: scan.customer_email,
     event_name: "scan_started",
-    event_data: { model }
+    event_data: { model, mock: useMock }
   });
 
   try {
+    if (useMock) {
+      const validated = auditResultSchema.parse(buildMockAuditResult(scan));
+
+      await supabase
+        .from("scans")
+        .update({
+          scan_status: "preview_ready",
+          ai_model: model,
+          ai_raw_output: {
+            mock: true,
+            reason: process.env.MOCK_AI_SCAN === "true" ? "MOCK_AI_SCAN=true" : "OPENAI_API_KEY missing"
+          },
+          ai_validated_output: validated,
+          overall_score: validated.overall_score,
+          readiness_level: validated.readiness_level,
+          error_message: null
+        })
+        .eq("id", scanId);
+
+      await supabase.from("events").insert({
+        scan_id: scanId,
+        customer_email: scan.customer_email,
+        event_name: "scan_completed",
+        event_data: {
+          model,
+          mock: true,
+          overall_score: validated.overall_score,
+          readiness_level: validated.readiness_level
+        }
+      });
+
+      if (shouldRedirect) {
+        return redirectToReport(request, scanId, { scanned: "1" });
+      }
+
+      return NextResponse.json({ ok: true, mock: true, scan_id: scanId, result: validated });
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error("Missing OPENAI_API_KEY.");
+    }
+
     const imageDataUrl = await loadImageDataUrl(supabase, scan);
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
