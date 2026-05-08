@@ -1,5 +1,6 @@
 import { PaymentCountdown } from "../../../components/PaymentCountdown";
 import { ReportIssueList } from "../../../components/ReportIssueList";
+import { RunAiScanForm } from "../../../components/RunAiScanForm";
 import { SiteHeader } from "../../../components/SiteHeader";
 import { getSafePayment, getPaymentById } from "../../../lib/payments";
 import { getSafeScan, getScanById } from "../../../lib/scans";
@@ -148,7 +149,7 @@ export default async function ReportPage({ params, searchParams }) {
           <div className="glass-device report-device">
             <div className="window">
               <div className="window-bar">
-                <div className="window-title">{hasPreview ? "Example Slaply report" : "Uploaded artwork"}</div>
+                {hasPreview ? <div className="window-title">Example Slaply report</div> : null}
               </div>
 
               <div className="report-ui">
@@ -202,10 +203,7 @@ export default async function ReportPage({ params, searchParams }) {
                         <p>Review your uploaded artwork before starting the AI scan.</p>
                       </div>
 
-                      <form action="/api/run-ai-scan" method="post" className="run-scan-form">
-                        <input type="hidden" name="scan_id" value={scan.id} />
-                        <button type="submit" className="button button-primary">Run AI scan</button>
-                      </form>
+                      <RunAiScanForm scanId={scan.id} />
                     </>
                   )}
                 </div>
