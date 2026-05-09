@@ -16,10 +16,11 @@ function validateForm(form) {
   const languageSelect = getField(form, "language");
   const consentInput = getField(form, "consent");
   const image = imageInput?.files?.[0];
+  const email = emailInput?.value.trim() || "";
 
   return {
     image: !image || !acceptedImageTypes.includes(image.type),
-    email: !emailInput?.value.trim() || !emailInput.validity.valid,
+    email: Boolean(email) && !emailInput.validity.valid,
     product_category: !categorySelect?.value,
     language: !languageSelect?.value,
     consent: !consentInput?.checked
