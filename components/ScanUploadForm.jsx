@@ -4,6 +4,7 @@ import { useState } from "react";
 import { productCategories, reportLanguages } from "../lib/scan-form-options";
 
 const acceptedImageTypes = ["image/jpeg", "image/png"];
+const uploadingLetters = "Uploading".split("");
 
 function getField(form, name) {
   return form.elements.namedItem(name);
@@ -34,6 +35,7 @@ function hasError(errors) {
 export function ScanUploadForm({ error = "" }) {
   const [fileName, setFileName] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [errors, setErrors] = useState({});
 
   function refreshValidation(form) {
@@ -49,7 +51,11 @@ export function ScanUploadForm({ error = "" }) {
 
     if (hasError(nextErrors)) {
       event.preventDefault();
+      setIsUploading(false);
+      return;
     }
+
+    setIsUploading(true);
   }
 
   function handleFileChange(event) {
@@ -129,7 +135,19 @@ export function ScanUploadForm({ error = "" }) {
           <span>I own or have permission to upload this artwork and understand this is an AI visual review only.</span>
         </label>
 
-        <button type="submit" className="button button-primary">Submit for scan</button>
+        <button type="submit" className="button button-primary" disabled={isUploading} aria-live="polite">
+          {isUploading ? (
+            <span className="thinking-word" aria-label="Uploading">
+              {uploadingLetters.map((letter, index) => (
+                <span key={`${letter}-${index}`} style={{ "--letter-index": index }} aria-hidden="true">
+                  {letter}
+                </span>
+              ))}
+            </span>
+          ) : (
+            "Submit for scan"
+          )}
+        </button>
       </div>
     </form>
   );

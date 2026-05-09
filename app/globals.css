@@ -1176,6 +1176,7 @@
         margin-top: 22px;
       }
 
+      .scan-form .button:disabled,
       .run-scan-form .button:disabled {
         cursor: progress;
         opacity: 1;
