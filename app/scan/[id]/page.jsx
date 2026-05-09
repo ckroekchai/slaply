@@ -101,11 +101,10 @@ export default async function ReportPage({ params, searchParams }) {
       <div className="liquid-orb orb-2" />
       <div className="liquid-orb orb-3" />
       <SiteHeader />
-      <main className="page-shell">
+      <main className="page-shell report-shell">
         <section className="container report-page">
           <div className="report-page-head">
             <div>
-              <span className="eyebrow">{hasPreview ? "Scan report" : "Scan queued"}</span>
               <h2>{hasPreview ? "Scan report" : "Scan queued"}</h2>
               <p>
                 {categoryLabel}

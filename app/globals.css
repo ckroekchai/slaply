@@ -1098,6 +1098,10 @@
         padding: 160px 0 80px;
       }
 
+      .page-shell.report-shell {
+        padding-top: 32px;
+      }
+
       .report-page {
         display: grid;
         gap: 28px;
@@ -1114,6 +1118,10 @@
       .report-page-head h2 {
         margin: 14px 0 8px;
         font-size: clamp(44px, 6vw, 76px);
+      }
+
+      .report-shell .report-page-head h2 {
+        margin-top: 0;
       }
 
       .report-page-head p,

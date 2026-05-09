@@ -62,6 +62,7 @@ Issue taxonomy and counts:
 - Sort issues in this order: all Text Errors first, then Hierarchy, then Readability.
 - Assign sequential id values starting from 1 after sorting. The id is used as the annotation number on the image and the report item number.
 - Each issue must describe one concrete visible mistake or risk. Do not combine multiple unrelated locations into one issue.
+- Only include an issue if you can point to one exact visible anchor in the artwork. If the problem is too broad to mark on a specific word, number, logo, icon, badge, product photo, offer, or visual area, omit it.
 - For Text Errors, the recommendation must start by repeating the exact wrong word, misspelling, spacing issue, or sentence problem visible in the artwork, then provide exactly one corrected wording option.
 - For Hierarchy and Readability, the title and recommendation must name the exact visible element to change, such as the specific word, number, offer, product image, icon, badge, date, logo, CTA, or visual area. Do not use vague phrases such as "secondary text", "main image", "headline", or "supporting details" unless you also identify the exact visible content.
 - For Readability, only discuss what is hard to read. If the problem is an unclear image, visual composition, or message priority, classify it as Hierarchy instead.
@@ -70,6 +71,8 @@ Annotation location:
 - For every issue, set location.x and location.y to the center of the exact visible area where the mistake appears inside the artwork image, normalized from 0 to 1 within the visible artwork boundaries.
 - If the issue is about a visual group rather than one word, point to the center of the most relevant visible group.
 - Do not invent a location outside the actual visible artwork. The annotation must land on the visible mistake or its closest visible element.
+- Never place an annotation on blank background, empty margin, whitespace, or the surrounding page/card area.
+- Before returning JSON, verify each annotation number against its report item. If the marker would not visually explain that exact item, revise the location or remove the issue.
 
 Severity labels:
 - Use High for a problem that may affect understanding, trust, or cause the communication to be misunderstood.
