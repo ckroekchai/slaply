@@ -1,7 +1,9 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
+import { getIssueCounts, inferIssueType, sortIssuesForReport } from "../../../lib/audit-issue-utils";
 import { auditJsonSchema, auditResultSchema } from "../../../lib/ai-audit-schema";
 import { buildMockAuditResult, isMockAiScanEnabled, mockAiModel } from "../../../lib/mock-ai-scan";
+import { formatProductCategory } from "../../../lib/scan-form-options";
 import { getStorageBucket, getSupabaseServerClient } from "../../../lib/supabase-server";
 
 export const runtime = "nodejs";
@@ -15,23 +17,62 @@ Boundaries:
 - Do not provide FDA, Thai FDA, regulatory, or compliance approval.
 - Do not provide print-ready certification.
 - Do not guarantee sales performance.
-- Only provide visual communication and packaging readiness feedback.
-- Return customer-facing text in Thai by default unless the scan language is English.
+- Only provide visual communication and packaging or promotion readiness feedback.
+- Analyze only for the selected product category. Do not judge the artwork using standards from another category.
+- Return customer-facing text only in the selected report language.
 - Return only structured JSON matching the schema.`;
 
 function buildUserPrompt(scan) {
   const optional = (value) => value || "Not provided";
 
-  return `Audit this packaging artwork.
+  const category = formatProductCategory(scan.product_category);
+  const language = scan.language === "english" ? "English" : "Thai";
+
+  return `Audit this artwork.
 
 Context:
-- Product category: ${scan.product_category}
+- Product category: ${category}
 - Sales channel: ${optional(scan.sales_channel)}
 - Target customer: ${optional(scan.target_customer)}
 - Price tier: ${optional(scan.price_tier)}
 - Main concern: ${optional(scan.main_concern)}
 - Launch stage: ${optional(scan.launch_stage)}
-- Report language: ${scan.language}
+- Report language: ${language}
+
+Category guardrails:
+- Treat "${category}" as the only category for this audit.
+- If the selected category is "Beauty / Skincare", focus on beauty/skincare packaging communication such as benefit clarity, trust cues, ingredient/result proof, premium perception, and shelf/marketplace readability.
+- If the selected category is "Supplement / Wellness", focus on supplement/wellness packaging communication such as use-case clarity, hierarchy, trust cues, readability, and customer confidence. Do not provide medical, FDA, Thai FDA, or regulatory approval.
+- If the selected category is "Food / Snack / Pet", focus on food/snack/pet packaging communication such as product type, appetite appeal, hierarchy, readability, and trust cues. Do not provide food-safety or regulatory approval.
+- If the selected category is "Ads / Promotion", audit it as ad/promotion creative, not as packaging. Focus on offer clarity, visual hierarchy, CTA/readability, trust cues, and promotion readiness.
+
+Language guardrails:
+- All customer-facing fields must be written in ${language}.
+- Do not mix Thai and English in report prose unless the visible artwork text itself is being quoted.
+
+Issue taxonomy and counts:
+- Classify every issue as exactly one issue_type: "Text Errors", "Hierarchy", or "Readability".
+- "Text Errors" means visible typo, misspelling, incorrect spacing, grammar, wording, sentence, or copy error.
+- "Hierarchy" means weak visual priority, unclear main message, competing focal points, missing emphasis, weak trust cue placement, or poor design hierarchy.
+- "Readability" means hard-to-read, too small, low contrast, unclear image/detail, confusing visual, or difficult-to-understand visual information.
+- issue_counts.text_errors must equal the number of issues with issue_type "Text Errors".
+- issue_counts.hierarchy must equal the number of issues with issue_type "Hierarchy".
+- issue_counts.readability must equal the number of issues with issue_type "Readability".
+- If no issues are found for a type, set that count to 0.
+- Sort issues in this order: all Text Errors first, then Hierarchy, then Readability.
+- Assign sequential id values starting from 1 after sorting. The id is used as the annotation number on the image and the report item number.
+- Each issue must describe one concrete visible mistake or risk. Do not combine multiple unrelated locations into one issue.
+
+Annotation location:
+- For every issue, set location.x and location.y to the center of the exact visible area where the mistake appears in the image, normalized from 0 to 1.
+- If the issue is about a visual group rather than one word, point to the center of the most relevant visible group.
+- Do not invent a location outside the actual visible artwork.
+
+Severity labels:
+- Use High for a problem that may affect understanding, trust, or cause the communication to be misunderstood.
+- Use Medium for a problem that affects clarity or trust but does not change the main communication.
+- Use Low for a small polish recommendation that is useful to review but not required to fix.
+- Do not use any other severity label.
 
 Score honestly. Prioritize issues that can affect commercial visual communication before production or launch.
 Include paid-report-ready conversion recommendations, priority fixes, and concise sample report content.`;
@@ -39,6 +80,20 @@ Include paid-report-ready conversion recommendations, priority fixes, and concis
 
 function getLiveModel() {
   return process.env.OPENAI_VISION_MODEL || "gpt-4.1-mini";
+}
+
+function normalizeAuditResult(result) {
+  const issues = sortIssuesForReport(result.issues || []).map((issue, index) => ({
+    ...issue,
+    id: index + 1,
+    issue_type: inferIssueType(issue)
+  }));
+
+  return {
+    ...result,
+    issues,
+    issue_counts: getIssueCounts({ issues })
+  };
 }
 
 function wantsHtmlRedirect(request) {
@@ -193,7 +248,7 @@ export async function POST(request) {
 
     const content = response.choices?.[0]?.message?.content;
     const parsedJson = JSON.parse(content);
-    const validated = auditResultSchema.parse(parsedJson);
+    const validated = auditResultSchema.parse(normalizeAuditResult(parsedJson));
 
     await supabase
       .from("scans")

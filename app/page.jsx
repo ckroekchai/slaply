@@ -62,7 +62,7 @@ export default async function Home({ searchParams }) {
 
                       <div className="score-grid">
                         <div className="score-card"><b>3</b><span>Text Errors</span></div>
-                        <div className="score-card"><b>2</b><span>Missing Info</span></div>
+                        <div className="score-card"><b>2</b><span>Hierarchy</span></div>
                         <div className="score-card"><b>5</b><span>Readability</span></div>
                       </div>
 
@@ -86,7 +86,7 @@ export default async function Home({ searchParams }) {
                         <div className="issue">
                           <div className="issue-top">
                             <h4>3. Wording issue</h4>
-                            <span className="severity">Action</span>
+                            <span className="severity low">Low</span>
                           </div>
                           <p>Some text may be misspelled or written inconsistently.</p>
                         </div>

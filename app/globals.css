@@ -541,13 +541,13 @@
       }
 
       .artwork-pin {
-        width: 34px;
-        height: 34px;
+        width: 24px;
+        height: 24px;
         transform: translate(-50%, -50%);
         border: 2px solid rgba(255, 255, 255, 0.92);
         background: #ff3b30;
-        font-size: 13px;
-        box-shadow: 0 10px 24px rgba(255, 59, 48, 0.34);
+        font-size: 11px;
+        box-shadow: 0 8px 18px rgba(255, 59, 48, 0.3);
       }
 
       .artwork-pin.marker-one {
@@ -696,6 +696,11 @@
       .severity.high {
         color: rgba(180, 35, 24, 0.96);
         background: rgba(255, 69, 58, 0.12);
+      }
+
+      .severity.low {
+        color: rgba(20, 122, 52, 0.92);
+        background: rgba(50, 215, 75, 0.12);
       }
 
       .issue p {
@@ -1226,6 +1231,8 @@
       }
 
       .dropzone .upload-icon {
+        position: relative;
+        isolation: isolate;
         width: 36px;
         height: 36px;
         display: flex;
@@ -1244,8 +1251,23 @@
       }
 
       .dropzone .upload-icon:not(.has-file) {
+        background: transparent;
+        box-shadow: none;
         padding-bottom: 2px;
         transform: translateY(4px);
+      }
+
+      .dropzone .upload-icon:not(.has-file)::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        border-radius: inherit;
+        transform: translateY(1px);
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, 0.25), transparent 44%),
+          linear-gradient(135deg, var(--ink), #2e3444);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 12px 26px rgba(0, 0, 0, 0.12);
       }
 
       .dropzone .upload-icon.has-file {

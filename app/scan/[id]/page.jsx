@@ -5,18 +5,17 @@ import { SiteHeader } from "../../../components/SiteHeader";
 import { getSafePayment, getPaymentById } from "../../../lib/payments";
 import { getSafeScan, getScanById } from "../../../lib/scans";
 import { getPromptPayDisplayName, getReportPriceThb } from "../../../lib/promptpay";
+import { formatProductCategory } from "../../../lib/scan-form-options";
 
 export const dynamic = "force-dynamic";
 
 function getPreviewMetrics(preview) {
-  const issues = preview?.issues || [];
-  const mediumCount = issues.filter((issue) => issue.severity === "Medium").length;
-  const readabilityRisk = Math.max(1, Math.min(9, Math.round((100 - (preview?.overall_score || 72)) / 6)));
+  const counts = preview?.issue_counts || { text_errors: 0, hierarchy: 0, readability: 0 };
 
   return [
-    { label: "Text Errors", value: issues.length || 3 },
-    { label: "Hierarchy", value: mediumCount || 2 },
-    { label: "Readability", value: readabilityRisk || 5 }
+    { label: "Text Errors", value: counts.text_errors || 0 },
+    { label: "Hierarchy", value: counts.hierarchy || 0 },
+    { label: "Readability", value: counts.readability || 0 }
   ];
 }
 
@@ -26,7 +25,7 @@ function clampPercent(value, fallback) {
 }
 
 function ArtworkPins({ issues = [] }) {
-  const pinnedIssues = issues.filter((issue) => issue.location).slice(0, 4);
+  const pinnedIssues = issues.filter((issue) => issue.location);
 
   return pinnedIssues.map((issue, index) => (
     <span
@@ -37,7 +36,7 @@ function ArtworkPins({ issues = [] }) {
         top: `${clampPercent(issue.location?.y, 0.5) * 100}%`
       }}
     >
-      {issue.id || index + 1}
+      {issue.display_id || issue.id || index + 1}
     </span>
   ));
 }
@@ -125,6 +124,9 @@ export default async function ReportPage({ params, searchParams }) {
     );
   }
 
+  const categoryLabel = formatProductCategory(scan.product_category);
+  const languageLabel = scan.language === "thai" ? "Thai report" : "English report";
+
   return (
     <>
       <div className="liquid-orb orb-1" />
@@ -138,7 +140,9 @@ export default async function ReportPage({ params, searchParams }) {
               <span className="eyebrow">{hasPreview ? "Scan report" : "Scan queued"}</span>
               <h2>{hasPreview ? "Scan report" : "Scan queued"}</h2>
               <p>
-                {scan.product_category} · {scan.language === "thai" ? "Thai report" : "English report"}
+                {categoryLabel}
+                {"\u00a0\u00a0·\u00a0\u00a0"}
+                {languageLabel}
               </p>
             </div>
           </div>
@@ -152,7 +156,7 @@ export default async function ReportPage({ params, searchParams }) {
 
                 <div className="report-zone">
                   <div className="report-head">
-                    <h3>{hasPreview ? "Audit summary" : "Scan queued"}</h3>
+                    <h3>{hasPreview ? "Audit summary" : "Artwork uploaded"}</h3>
                     {hasPreview ? <span className="status-pill">{isPaid ? "Paid" : "Scan complete"}</span> : null}
                   </div>
 
@@ -169,6 +173,7 @@ export default async function ReportPage({ params, searchParams }) {
 
                       <ReportIssueList
                         issues={safeScan.preview.issues}
+                        language={scan.language}
                         initiallyUnlocked={isPaid}
                         autoRevealSeconds={autoRevealSeconds}
                       />
@@ -192,8 +197,8 @@ export default async function ReportPage({ params, searchParams }) {
 
                       <div className="issue">
                         <div className="issue-top">
-                          <h4>Artwork uploaded</h4>
-                          <span className="severity">Next</span>
+                          <h4>All set</h4>
+                          <span className="severity">Status Ready</span>
                         </div>
                         <p>Review your uploaded artwork before starting the AI scan.</p>
                       </div>
