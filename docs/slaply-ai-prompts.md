@@ -1,14 +1,31 @@
-import OpenAI from "openai";
-import { NextResponse } from "next/server";
-import { getIssueCounts, inferIssueType, sortIssuesForReport } from "../../../lib/audit-issue-utils";
-import { auditJsonSchema, auditResultSchema } from "../../../lib/ai-audit-schema";
-import { buildMockAuditResult, isMockAiScanEnabled, mockAiModel } from "../../../lib/mock-ai-scan";
-import { formatProductCategory } from "../../../lib/scan-form-options";
-import { getStorageBucket, getSupabaseServerClient } from "../../../lib/supabase-server";
+# Slaply AI Prompts — Pre-flight Scope Version
 
-export const runtime = "nodejs";
+Source: `app/api/run-ai-scan/route.js`
 
-const SYSTEM_PROMPT = `You are Slaply, an AI pre-flight packaging audit assistant.
+This file is a drop-in replacement for the current prompts sent to the AI scan endpoint.
+
+`User prompt` is a template. The website replaces values such as `${category}` and `${language}` for each scan.
+
+## Core Scope Decision
+
+Slaply AI Audit is a **pre-flight confidence check** before print, production, launch, or marketplace listing.
+
+The design may already be approved by the customer. The AI must not re-judge the approved creative direction, brand style, visual taste, or overall design quality unless there is a concrete visible risk that could create a problem before print, production, launch, or listing.
+
+Slaply should only flag issues in these three categories:
+
+1. **Text Errors** — Typo / misspelling, Grammar error, Missing word, Duplicate word, Incorrect spacing, Incorrect line break, Wrong product name, Wrong variant / flavor / shade, Wrong size / unit, Inconsistent number, Placeholder text, Internal note left in design, Wrong URL / handle / contact, QR instruction mismatch, Date / promotion typo, Language inconsistency error, Claim wording typo, or copy errors that should be checked before production/listing.
+2. **Hierarchy** — Product identity is hard to identify, Product type is unclear, Variant/flavor/shade/formula/size/ or quantity may be confused, Size/unit/price/promo/deadline/ or offer condition is hard to locate, CTA/QR instruction/ or customer instruction may be missed, Proof point, or claim is present but likely to be overlooked, Two visible information elements may cause practical confusion. This is not design hierarchy or aesthetic critique.
+3. **Readability** — Text too small, Low contrast, Thin font risk, Crowded text, Tight spacing, Text over busy image, Curved/distorted text hard to read, Important number hard to read, Expiry/promo date too small, QR code too small / low contrast, Barcode/QR area visually risky, Blurry text, Low-resolution image detail, Watermark/stock-preview visible, Text near edge, Small white text on bright background, Transparent/outlined text risk, Thumbnail unreadable, Mobile screen readability risk.
+
+Slaply should not provide subjective design critique, redesign suggestions, art direction, brand strategy, compliance approval, sales guarantees, or print-ready certification.
+
+---
+
+## SYSTEM Prompt
+
+```text
+You are Slaply, an AI pre-flight packaging audit assistant.
 
 Analyze the submitted artwork only as a pre-flight confidence check before print, production, launch, or marketplace listing.
 
@@ -30,15 +47,15 @@ Boundaries:
 - Analyze only for the selected product category. Do not judge the artwork using standards from another category.
 - Return customer-facing text only in the selected report language.
 - When quoting visible artwork text, preserve the exact visible wording even if it is in another language.
-- Return only structured JSON matching the schema.`;
+- Return only structured JSON matching the schema.
+```
 
-function buildUserPrompt(scan) {
-  const optional = (value) => value || "Not provided";
+---
 
-  const category = formatProductCategory(scan.product_category);
-  const language = scan.language === "english" ? "English" : "Thai";
+## User Prompt Template
 
-  return `Audit this artwork as a Slaply pre-flight audit.
+```text
+Audit this artwork as a Slaply pre-flight audit.
 
 Context:
 - Product category: ${category}
@@ -137,7 +154,7 @@ Readability rules:
 - If the issue is an unclear image, broad visual concept, or aesthetic concern, do not classify it as Readability. Classify it as Hierarchy only if it creates a concrete misunderstanding risk; otherwise omit it.
 
 Annotation location:
-- For every issue, set location.x and location.y to the center of the exact visible area where the mistake appears inside the artwork image, normalized from 0 to 1 within the visible artwork boundaries.
+- For every issue, set location.x and location.y to the center of the exact visible area where the mistake or risk appears inside the artwork image, normalized from 0 to 1 within the visible artwork boundaries.
 - The annotation marker must sit directly on top of the problem, not beside it. Center the marker over the exact word, number, logo, icon, watermark, image detail, panel, frame, QR/barcode area, or design element being discussed.
 - If the issue is about a small word, line, number, logo, QR/barcode area, or watermark, point to that exact small target, not the center of the whole panel.
 - If the issue is about a visual group rather than one word, point to the most representative visible part of that group that proves the issue.
@@ -168,232 +185,24 @@ Output:
 - Return only structured JSON matching the schema.
 - Do not add fields that are not in the schema.
 - Use the schema's summary, recommendation, priority, next-step, or equivalent fields to provide concise pre-flight guidance.
-- Do not include broad conversion strategy, sample report copy, or redesign recommendations unless the schema explicitly supports them and they are tied to a concrete pre-flight risk.`;
-}
+- Do not include broad conversion strategy, sample report copy, or redesign recommendations unless the schema explicitly supports them and they are tied to a concrete pre-flight risk.
+```
 
-function getLiveModel() {
-  return process.env.OPENAI_VISION_MODEL || "gpt-4.1-mini";
-}
+---
 
-function normalizeAuditResult(result) {
-  const issues = sortIssuesForReport(result.issues || []).map((issue, index) => ({
-    ...issue,
-    id: index + 1,
-    issue_type: inferIssueType(issue)
-  }));
+## Backend Validation Notes
 
-  return {
-    ...result,
-    issues,
-    issue_counts: getIssueCounts({ issues })
-  };
-}
+After the AI returns JSON, the backend should still validate these points before saving or rendering the report:
 
-function wantsHtmlRedirect(request) {
-  return request.headers.get("accept")?.includes("text/html");
-}
-
-function redirectToReport(request, scanId, params = {}) {
-  const url = new URL(`/scan/${scanId}`, request.url);
-
-  Object.entries(params).forEach(([key, value]) => {
-    if (value) url.searchParams.set(key, value);
-  });
-
-  return NextResponse.redirect(url, { status: 303 });
-}
-
-async function loadImageDataUrl(supabase, scan) {
-  if (!scan.image_storage_path) {
-    throw new Error("Scan is missing image_storage_path.");
-  }
-
-  const { data, error } = await supabase.storage
-    .from(getStorageBucket())
-    .download(scan.image_storage_path);
-
-  if (error || !data) {
-    throw new Error("Could not download scan image.");
-  }
-
-  const arrayBuffer = await data.arrayBuffer();
-  const mimeType = data.type || (scan.image_storage_path.endsWith(".png") ? "image/png" : "image/jpeg");
-  const base64 = Buffer.from(arrayBuffer).toString("base64");
-  return `data:${mimeType};base64,${base64}`;
-}
-
-export async function POST(request) {
-  let scanId;
-  const shouldRedirect = wantsHtmlRedirect(request);
-
-  try {
-    const contentType = request.headers.get("content-type") || "";
-
-    if (contentType.includes("multipart/form-data") || contentType.includes("application/x-www-form-urlencoded")) {
-      const formData = await request.formData();
-      scanId = formData.get("scan_id");
-    } else {
-      const body = await request.json();
-      scanId = body.scan_id;
-    }
-  } catch {
-    return NextResponse.json({ ok: false, error: "Invalid JSON body." }, { status: 400 });
-  }
-
-  if (!scanId) {
-    return NextResponse.json({ ok: false, error: "Missing scan_id." }, { status: 400 });
-  }
-
-  const supabase = getSupabaseServerClient();
-  const useMock = isMockAiScanEnabled();
-  const model = useMock ? mockAiModel : getLiveModel();
-
-  const { data: scan, error: scanError } = await supabase
-    .from("scans")
-    .select("*")
-    .eq("id", scanId)
-    .single();
-
-  if (scanError || !scan) {
-    return NextResponse.json({ ok: false, error: "Scan not found." }, { status: 404 });
-  }
-
-  await supabase
-    .from("scans")
-    .update({ scan_status: "scanning", error_message: null })
-    .eq("id", scanId);
-
-  await supabase.from("events").insert({
-    scan_id: scanId,
-    customer_email: scan.customer_email,
-    event_name: "scan_started",
-    event_data: { model, mock: useMock }
-  });
-
-  try {
-    if (useMock) {
-      const validated = auditResultSchema.parse(buildMockAuditResult(scan));
-
-      await supabase
-        .from("scans")
-        .update({
-          scan_status: "preview_ready",
-          ai_model: model,
-          ai_raw_output: {
-            mock: true,
-            reason: process.env.MOCK_AI_SCAN === "true" ? "MOCK_AI_SCAN=true" : "OPENAI_API_KEY missing"
-          },
-          ai_validated_output: validated,
-          overall_score: validated.overall_score,
-          readiness_level: validated.readiness_level,
-          error_message: null
-        })
-        .eq("id", scanId);
-
-      await supabase.from("events").insert({
-        scan_id: scanId,
-        customer_email: scan.customer_email,
-        event_name: "scan_completed",
-        event_data: {
-          model,
-          mock: true,
-          overall_score: validated.overall_score,
-          readiness_level: validated.readiness_level
-        }
-      });
-
-      if (shouldRedirect) {
-        return redirectToReport(request, scanId, { scanned: "1" });
-      }
-
-      return NextResponse.json({ ok: true, mock: true, scan_id: scanId, result: validated });
-    }
-
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error("Missing OPENAI_API_KEY.");
-    }
-
-    const imageDataUrl = await loadImageDataUrl(supabase, scan);
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-    const response = await openai.chat.completions.create({
-      model,
-      temperature: 0.2,
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "slaply_packaging_audit",
-          strict: true,
-          schema: auditJsonSchema
-        }
-      },
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        {
-          role: "user",
-          content: [
-            { type: "text", text: buildUserPrompt(scan) },
-            { type: "image_url", image_url: { url: imageDataUrl } }
-          ]
-        }
-      ]
-    });
-
-    const content = response.choices?.[0]?.message?.content;
-    const parsedJson = JSON.parse(content);
-    const validated = auditResultSchema.parse(normalizeAuditResult(parsedJson));
-
-    await supabase
-      .from("scans")
-      .update({
-        scan_status: "preview_ready",
-        ai_model: model,
-        ai_raw_output: response,
-        ai_validated_output: validated,
-        overall_score: validated.overall_score,
-        readiness_level: validated.readiness_level,
-        error_message: null
-      })
-      .eq("id", scanId);
-
-    await supabase.from("events").insert({
-      scan_id: scanId,
-      customer_email: scan.customer_email,
-      event_name: "scan_completed",
-      event_data: {
-        model,
-        overall_score: validated.overall_score,
-        readiness_level: validated.readiness_level
-      }
-    });
-
-    if (shouldRedirect) {
-      return redirectToReport(request, scanId, { scanned: "1" });
-    }
-
-    return NextResponse.json({ ok: true, scan_id: scanId, result: validated });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "AI scan failed.";
-
-    await supabase
-      .from("scans")
-      .update({
-        scan_status: "failed",
-        error_message: message
-      })
-      .eq("id", scanId);
-
-    await supabase.from("events").insert({
-      scan_id: scanId,
-      customer_email: scan.customer_email,
-      event_name: "scan_failed",
-      event_data: { model, message }
-    });
-
-    if (shouldRedirect) {
-      return redirectToReport(request, scanId, { error: message });
-    }
-
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
-  }
-}
+```text
+- issue_counts.text_errors equals issues filtered by issue_type "Text Errors".
+- issue_counts.hierarchy equals issues filtered by issue_type "Hierarchy".
+- issue_counts.readability equals issues filtered by issue_type "Readability".
+- issue_type is one of: "Text Errors", "Hierarchy", "Readability".
+- severity is one of: "High", "Medium", "Low".
+- location.x and location.y are between 0 and 1.
+- issue IDs are sequential after sorting.
+- issues are sorted: Text Errors first, then Hierarchy, then Readability.
+- no report text claims FDA, Thai FDA, regulatory, legal, print-ready, prepress, compliance, sales, or manufacturing approval.
+- no recommendation asks for broad redesign unless tied to a concrete visible pre-flight risk.
+```
