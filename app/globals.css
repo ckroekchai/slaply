@@ -614,8 +614,14 @@
       }
 
       .status-pill.status-pill-ready {
+        min-height: auto;
+        padding: 0;
+        border: 0;
+        background: transparent;
         color: rgba(0, 92, 230, 0.92);
-        background: rgba(0, 122, 255, 0.1);
+        box-shadow: none;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
       }
 
       .status-pill.status-pill-ready::before {
@@ -1099,7 +1105,11 @@
       }
 
       .page-shell.report-shell {
-        padding-top: 32px;
+        padding-top: 0;
+      }
+
+      .report-shell .report-page {
+        margin-top: -68px;
       }
 
       .report-page {

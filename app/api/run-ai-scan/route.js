@@ -54,7 +54,7 @@ Issue taxonomy and counts:
 - Classify every issue as exactly one issue_type: "Text Errors", "Hierarchy", or "Readability".
 - "Text Errors" means visible typo, misspelling, incorrect spacing, grammar, wording, sentence, or copy error.
 - "Hierarchy" means weak visual priority, unclear main message, competing focal points, missing emphasis, weak trust cue placement, unclear composition, confusing image choice, CTA/offer hierarchy, or poor design hierarchy.
-- "Readability" means visible text, number, date, label, or small detail is physically hard to read because of size, contrast, spacing, crowding, blur, or low resolution. Do not classify general composition, image choice, or visual concept issues as Readability; those belong in Hierarchy.
+- "Readability" means visible text, number, date, label, small detail, or a visible watermark/stock-preview/designer-preview mark is physically hard to read, easy to miss, or unsafe for production because of size, contrast, spacing, crowding, blur, low resolution, or watermark presence. Do not classify general composition, image choice, or visual concept issues as Readability; those belong in Hierarchy.
 - issue_counts.text_errors must equal the number of issues with issue_type "Text Errors".
 - issue_counts.hierarchy must equal the number of issues with issue_type "Hierarchy".
 - issue_counts.readability must equal the number of issues with issue_type "Readability".
@@ -66,10 +66,13 @@ Issue taxonomy and counts:
 - For Text Errors, the recommendation must start by repeating the exact wrong word, misspelling, spacing issue, or sentence problem visible in the artwork, then provide exactly one corrected wording option.
 - For Hierarchy and Readability, the title and recommendation must name the exact visible element to change, such as the specific word, number, offer, product image, icon, badge, date, logo, CTA, or visual area. Do not use vague phrases such as "secondary text", "main image", "headline", or "supporting details" unless you also identify the exact visible content.
 - For Readability, only discuss what is hard to read. If the problem is an unclear image, visual composition, or message priority, classify it as Hierarchy instead.
+- Always check for visible watermarks, stock-preview marks, designer-preview marks, or repeated faint logo/text overlays. If one is visible, create a Readability issue and place the annotation directly on the watermark.
 
 Annotation location:
 - For every issue, set location.x and location.y to the center of the exact visible area where the mistake appears inside the artwork image, normalized from 0 to 1 within the visible artwork boundaries.
+- The annotation marker may sit directly on top of the problem. Prefer centering the marker over the exact word, number, logo, icon, watermark, image detail, or design element being discussed instead of placing it beside the element.
 - If the issue is about a visual group rather than one word, point to the center of the most relevant visible group.
+- Do not point to dimensions, dieline measurements, rulers, or production marks unless the issue specifically mentions that dimension, measurement, ruler, or production mark.
 - Do not invent a location outside the actual visible artwork. The annotation must land on the visible mistake or its closest visible element.
 - Never place an annotation on blank background, empty margin, whitespace, or the surrounding page/card area.
 - Before returning JSON, verify each annotation number against its report item. If the marker would not visually explain that exact item, revise the location or remove the issue.
