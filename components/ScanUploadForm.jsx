@@ -30,84 +30,10 @@ function hasError(errors) {
   return Object.values(errors).some(Boolean);
 }
 
-function CustomSelect({ error, label, name, onChange, options, value }) {
-  const [isOpen, setIsOpen] = useState(false);
-
-  function handleSelect(nextValue) {
-    onChange(name, nextValue);
-    setIsOpen(false);
-  }
-
-  function handleOpen(event) {
-    event.preventDefault();
-    event.currentTarget.focus({ preventScroll: true });
-    setIsOpen((current) => !current);
-  }
-
-  function handleKeyDown(event) {
-    if ([" ", "Enter", "ArrowDown"].includes(event.key)) {
-      event.preventDefault();
-      setIsOpen(true);
-    }
-
-    if (event.key === "Escape") {
-      setIsOpen(false);
-    }
-  }
-
-  return (
-    <div
-      className={`custom-select ${isOpen ? "is-open" : ""}`}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) {
-          setIsOpen(false);
-        }
-      }}
-    >
-      <select
-        className={error ? "is-invalid" : ""}
-        name={name}
-        aria-expanded={isOpen}
-        aria-label={label}
-        onChange={(event) => handleSelect(event.currentTarget.value)}
-        onKeyDown={handleKeyDown}
-        onPointerDown={handleOpen}
-        value={value}
-      >
-        <option value="" disabled>{label}</option>
-        {options.map((item) => (
-          <option key={item.value} value={item.value}>{item.label}</option>
-        ))}
-      </select>
-
-      {isOpen ? (
-        <div className="custom-select-menu" role="listbox" aria-label={label}>
-          {options.map((item) => (
-            <button
-              type="button"
-              className={`custom-select-option ${item.value === value ? "is-selected" : ""}`}
-              key={item.value}
-              role="option"
-              aria-selected={item.value === value}
-              onClick={() => handleSelect(item.value)}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 export function ScanUploadForm({ error = "" }) {
   const [fileName, setFileName] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [errors, setErrors] = useState({});
-  const [selectValues, setSelectValues] = useState({
-    product_category: "",
-    language: ""
-  });
 
   function refreshValidation(form) {
     if (submitted) {
@@ -133,20 +59,6 @@ export function ScanUploadForm({ error = "" }) {
 
   function handleFieldChange(event) {
     refreshValidation(event.currentTarget.form);
-  }
-
-  function handleSelectChange(name, value) {
-    setSelectValues((current) => ({
-      ...current,
-      [name]: value
-    }));
-
-    if (submitted) {
-      setErrors((current) => ({
-        ...current,
-        [name]: !value
-      }));
-    }
   }
 
   return (
@@ -185,23 +97,31 @@ export function ScanUploadForm({ error = "" }) {
           onChange={handleFieldChange}
         />
 
-        <CustomSelect
-          error={errors.product_category}
-          label="Product category"
+        <select
+          className={errors.product_category ? "is-invalid" : ""}
           name="product_category"
-          onChange={handleSelectChange}
-          options={productCategories.map((item) => ({ label: item, value: item }))}
-          value={selectValues.product_category}
-        />
+          aria-label="Product category"
+          defaultValue=""
+          onChange={handleFieldChange}
+        >
+          <option value="" disabled>Product category</option>
+          {productCategories.map((item) => (
+            <option key={item} value={item}>{item}</option>
+          ))}
+        </select>
 
-        <CustomSelect
-          error={errors.language}
-          label="Report language"
+        <select
+          className={errors.language ? "is-invalid" : ""}
           name="language"
-          onChange={handleSelectChange}
-          options={reportLanguages}
-          value={selectValues.language}
-        />
+          aria-label="Report language"
+          defaultValue=""
+          onChange={handleFieldChange}
+        >
+          <option value="" disabled>Report language</option>
+          {reportLanguages.map((item) => (
+            <option key={item.value} value={item.value}>{item.label}</option>
+          ))}
+        </select>
 
         <label className={`consent-row ${errors.consent ? "is-invalid" : ""}`}>
           <input type="checkbox" name="consent" onChange={handleFieldChange} />
