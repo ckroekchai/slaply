@@ -1245,7 +1245,7 @@
 
       .dropzone .upload-icon:not(.has-file) {
         padding-bottom: 2px;
-        transform: translateY(2px);
+        transform: translateY(4px);
       }
 
       .dropzone .upload-icon.has-file {

@@ -15,8 +15,8 @@ function getPreviewMetrics(preview) {
 
   return [
     { label: "Text Errors", value: issues.length || 3 },
-    { label: "Missing Info", value: mediumCount || 2 },
-    { label: "Readability risk", value: readabilityRisk || 5 }
+    { label: "Hierarchy", value: mediumCount || 2 },
+    { label: "Readability", value: readabilityRisk || 5 }
   ];
 }
 
