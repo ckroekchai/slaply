@@ -592,16 +592,18 @@
         display: inline-flex;
         align-items: center;
         gap: 7px;
-        min-height: 31px;
-        padding: 0 11px;
+        min-height: auto;
+        padding: 0;
         border-radius: 999px;
-        border: 1px solid rgba(255, 255, 255, 0.72);
-        background: rgba(255, 255, 255, 0.42);
+        border: 0;
+        background: transparent;
         color: rgba(20, 122, 52, 0.92);
         font-size: 12px;
         font-weight: 780;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.76);
+        box-shadow: none;
         white-space: nowrap;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
       }
 
       .status-pill::before {

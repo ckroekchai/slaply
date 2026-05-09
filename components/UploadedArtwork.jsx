@@ -4,7 +4,7 @@ import { useState } from "react";
 
 function clampPercent(value, fallback) {
   if (typeof value !== "number" || Number.isNaN(value)) return fallback;
-  return Math.max(0.08, Math.min(0.92, value));
+  return Math.max(0.02, Math.min(0.98, value));
 }
 
 function getPinPosition(issue, imageSize) {
