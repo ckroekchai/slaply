@@ -2,6 +2,7 @@ import { PaymentCountdown } from "../../../components/PaymentCountdown";
 import { ReportIssueList } from "../../../components/ReportIssueList";
 import { RunAiScanForm } from "../../../components/RunAiScanForm";
 import { SiteHeader } from "../../../components/SiteHeader";
+import { UploadedArtwork } from "../../../components/UploadedArtwork";
 import { getSafePayment, getPaymentById } from "../../../lib/payments";
 import { getSafeScan, getScanById } from "../../../lib/scans";
 import { getPromptPayDisplayName, getReportPriceThb } from "../../../lib/promptpay";
@@ -17,39 +18,6 @@ function getPreviewMetrics(preview) {
     { label: "Hierarchy", value: counts.hierarchy || 0 },
     { label: "Readability", value: counts.readability || 0 }
   ];
-}
-
-function clampPercent(value, fallback) {
-  if (typeof value !== "number" || Number.isNaN(value)) return fallback;
-  return Math.max(0.08, Math.min(0.92, value));
-}
-
-function ArtworkPins({ issues = [] }) {
-  const pinnedIssues = issues.filter((issue) => issue.location);
-
-  return pinnedIssues.map((issue, index) => (
-    <span
-      className="pin artwork-pin"
-      key={issue.id}
-      style={{
-        left: `${clampPercent(issue.location?.x, 0.5) * 100}%`,
-        top: `${clampPercent(issue.location?.y, 0.5) * 100}%`
-      }}
-    >
-      {issue.display_id || issue.id || index + 1}
-    </span>
-  ));
-}
-
-function UploadedArtwork({ imageUrl, issues = [] }) {
-  return (
-    <div className="pack-zone">
-      <div className="pack-card artwork-card" aria-label="Uploaded packaging artwork">
-        {imageUrl ? <img src={imageUrl} alt="Uploaded packaging artwork" /> : null}
-        <ArtworkPins issues={issues} />
-      </div>
-    </div>
-  );
 }
 
 function PaymentBlock({ payment, scanId, reportPrice, autoRevealSeconds = 0 }) {
@@ -173,7 +141,6 @@ export default async function ReportPage({ params, searchParams }) {
 
                       <ReportIssueList
                         issues={safeScan.preview.issues}
-                        language={scan.language}
                         initiallyUnlocked={isPaid}
                         autoRevealSeconds={autoRevealSeconds}
                       />
@@ -198,7 +165,7 @@ export default async function ReportPage({ params, searchParams }) {
                       <div className="issue">
                         <div className="issue-top">
                           <h4>All set</h4>
-                          <span className="severity">Status Ready</span>
+                          <span className="status-pill status-pill-ready">Ready to scan</span>
                         </div>
                         <p>Review your uploaded artwork before starting the AI scan.</p>
                       </div>

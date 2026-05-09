@@ -53,8 +53,8 @@ Language guardrails:
 Issue taxonomy and counts:
 - Classify every issue as exactly one issue_type: "Text Errors", "Hierarchy", or "Readability".
 - "Text Errors" means visible typo, misspelling, incorrect spacing, grammar, wording, sentence, or copy error.
-- "Hierarchy" means weak visual priority, unclear main message, competing focal points, missing emphasis, weak trust cue placement, or poor design hierarchy.
-- "Readability" means hard-to-read, too small, low contrast, unclear image/detail, confusing visual, or difficult-to-understand visual information.
+- "Hierarchy" means weak visual priority, unclear main message, competing focal points, missing emphasis, weak trust cue placement, unclear composition, confusing image choice, CTA/offer hierarchy, or poor design hierarchy.
+- "Readability" means visible text, number, date, label, or small detail is physically hard to read because of size, contrast, spacing, crowding, blur, or low resolution. Do not classify general composition, image choice, or visual concept issues as Readability; those belong in Hierarchy.
 - issue_counts.text_errors must equal the number of issues with issue_type "Text Errors".
 - issue_counts.hierarchy must equal the number of issues with issue_type "Hierarchy".
 - issue_counts.readability must equal the number of issues with issue_type "Readability".
@@ -62,11 +62,14 @@ Issue taxonomy and counts:
 - Sort issues in this order: all Text Errors first, then Hierarchy, then Readability.
 - Assign sequential id values starting from 1 after sorting. The id is used as the annotation number on the image and the report item number.
 - Each issue must describe one concrete visible mistake or risk. Do not combine multiple unrelated locations into one issue.
+- For Text Errors, the recommendation must start by repeating the exact wrong word, misspelling, spacing issue, or sentence problem visible in the artwork, then provide exactly one corrected wording option.
+- For Hierarchy and Readability, the title and recommendation must name the exact visible element to change, such as the specific word, number, offer, product image, icon, badge, date, logo, CTA, or visual area. Do not use vague phrases such as "secondary text", "main image", "headline", or "supporting details" unless you also identify the exact visible content.
+- For Readability, only discuss what is hard to read. If the problem is an unclear image, visual composition, or message priority, classify it as Hierarchy instead.
 
 Annotation location:
-- For every issue, set location.x and location.y to the center of the exact visible area where the mistake appears in the image, normalized from 0 to 1.
+- For every issue, set location.x and location.y to the center of the exact visible area where the mistake appears inside the artwork image, normalized from 0 to 1 within the visible artwork boundaries.
 - If the issue is about a visual group rather than one word, point to the center of the most relevant visible group.
-- Do not invent a location outside the actual visible artwork.
+- Do not invent a location outside the actual visible artwork. The annotation must land on the visible mistake or its closest visible element.
 
 Severity labels:
 - Use High for a problem that may affect understanding, trust, or cause the communication to be misunderstood.
