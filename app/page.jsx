@@ -166,7 +166,7 @@ export default async function Home({ searchParams }) {
             <div className="pricing-grid">
               <article className="pricing-card">
                 <h3>Free Scan</h3>
-                <p>For a quick issue preview before you commit.</p>
+                <p>For a quick issue preview before you decide.</p>
                 <div className="price">Free</div>
                 <div className="price-note">Limited preview</div>
                 <ul className="pricing-list">
@@ -181,7 +181,7 @@ export default async function Home({ searchParams }) {
                 <h3>Full Report</h3>
                 <p>For clients who need a clearer decision before production or launch.</p>
                 <div className="price">THB 399</div>
-                <div className="price-note">Each report</div>
+                <div className="price-note">Per report</div>
                 <ul className="pricing-list">
                   <li>Annotated issue map</li>
                   <li>Risk and clarity scoring</li>

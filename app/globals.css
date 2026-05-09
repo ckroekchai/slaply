@@ -1026,6 +1026,10 @@
         font-weight: 780;
       }
 
+      .upload-dropzone > strong {
+        transform: translateY(-1px);
+      }
+
       .dropzone span {
         color: rgba(29, 29, 31, 0.54);
         font-size: 14px;
@@ -1241,6 +1245,7 @@
 
       .dropzone .upload-icon:not(.has-file) {
         padding-bottom: 2px;
+        transform: translateY(2px);
       }
 
       .dropzone .upload-icon.has-file {
@@ -1259,7 +1264,7 @@
 
       .upload-dropzone > span:not(.upload-icon) {
         display: block;
-        margin-top: -10px;
+        margin-top: -12px;
       }
 
       .consent-row {
