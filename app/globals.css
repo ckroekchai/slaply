@@ -1052,7 +1052,7 @@
       }
 
       .upload-dropzone > strong {
-        transform: translateY(1px);
+        transform: translateY(3px);
       }
 
       .dropzone span {
@@ -1279,7 +1279,7 @@
         background: transparent;
         box-shadow: none;
         padding-bottom: 2px;
-        transform: translateY(4px);
+        transform: translateY(6px);
       }
 
       .dropzone .upload-icon:not(.has-file)::before {
@@ -1311,7 +1311,7 @@
 
       .upload-dropzone > span:not(.upload-icon) {
         display: block;
-        margin-top: -8px;
+        margin-top: -6px;
       }
 
       .consent-row {
