@@ -84,7 +84,11 @@ export function ScanUploadForm({ error = "" }) {
           {fileName || "+"}
         </span>
         <strong>Upload your artwork</strong>
-        <span>High-quality PNG or JPG</span>
+        <span>
+          High-quality PNG or JPG
+          <br />
+          Cropped to artwork only
+        </span>
         <input
           type="file"
           name="image"
