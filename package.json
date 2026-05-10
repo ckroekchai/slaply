@@ -5,9 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "build:cloudflare": "npx -y @opennextjs/cloudflare@latest build",
-    "preview:cloudflare": "npm run build:cloudflare && npx -y @opennextjs/cloudflare@latest preview",
-    "deploy:cloudflare": "npm run build:cloudflare && npx -y @opennextjs/cloudflare@latest deploy",
+    "build:cloudflare": "opennextjs-cloudflare build",
+    "preview:cloudflare": "npm run build:cloudflare && opennextjs-cloudflare preview",
+    "deploy:cloudflare": "npm run build:cloudflare && opennextjs-cloudflare deploy",
     "start": "next start",
     "lint": "next lint"
   },

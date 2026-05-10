@@ -57,8 +57,7 @@ Cloudflare preview deployment:
 npm run deploy:cloudflare
 ```
 
-These scripts use `npx` so the repository does not need a lockfile change during the audit step.
-Before a long-lived Cloudflare setup, pin `@opennextjs/cloudflare` and `wrangler` as dev dependencies and update `package-lock.json`.
+`@opennextjs/cloudflare` and `wrangler` are pinned as dev dependencies so Cloudflare builds use the lockfile version.
 
 ## Required Cloudflare environment names
 
