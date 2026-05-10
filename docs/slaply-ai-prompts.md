@@ -47,6 +47,7 @@ Boundaries:
 - Analyze only for the selected product category. Do not judge the artwork using standards from another category.
 - Return customer-facing text only in the selected report language.
 - When quoting visible artwork text, preserve the exact visible wording even if it is in another language.
+- If the selected report language is English, every customer-facing explanation must be English prose. Thai text is allowed only when it is an exact quote from the artwork.
 - Return only structured JSON matching the schema.
 ```
 
@@ -105,8 +106,11 @@ Dieline and panel context:
 
 Language guardrails:
 - All customer-facing fields must be written in ${language}.
+- Customer-facing fields include summary, issues[].title, issues[].why_it_matters, issues[].recommendation, conversion_recommendations, priority_fixes, next_steps, and paid_report_content.
 - When identifying visible text, quote the exact text as it appears in the artwork, even if it is in another language.
-- Do not mix Thai and English in explanatory prose unless quoting visible artwork text.
+- If ${language} is English, write all explanatory prose in English. Do not use Thai explanation phrases such as "ควรตรวจยืนยัน", "ก่อนผลิต", or "อาจมองไม่เห็น" unless those words are exact visible artwork text being quoted.
+- If ${language} is Thai, write all explanatory prose in Thai. English words may appear only for exact visible artwork text, standard product/category terms, or unavoidable proper nouns.
+- Do not mix Thai and English in explanatory prose unless quoting exact visible artwork text.
 
 Issue taxonomy and counts:
 - Classify every issue as exactly one issue_type: "Text Errors", "Hierarchy", or "Readability".
@@ -128,7 +132,7 @@ Issue taxonomy and counts:
 Text Errors rules:
 - Only flag actual visible text errors or inconsistencies. Do not rewrite copy for style, persuasion, tone, or conversion.
 - For Text Errors, the recommendation must start by repeating the exact wrong word, misspelling, spacing issue, sentence problem, inconsistent number, wrong unit, or placeholder visible in the artwork, then provide exactly one corrected wording option or checking instruction.
-- If the visible wording may be intentional and cannot be confirmed as an error, use cautious wording such as "ควรตรวจยืนยัน" or the equivalent in the selected report language.
+- If the visible wording may be intentional and cannot be confirmed as an error, use cautious wording in the selected report language. For English reports, use wording like "Check before production whether...". For Thai reports, wording like "ควรตรวจยืนยัน..." is acceptable.
 
 Hierarchy rules:
 - Treat "Hierarchy" as production/listing information risk, not design hierarchy.
@@ -185,7 +189,8 @@ Scoring:
 
 Recommendation tone:
 - Use cautious, production-safe wording.
-- Prefer phrases like "ควรตรวจยืนยันก่อนผลิต", "อาจอ่านยากในงานจริง", "ควรเช็กก่อนขึ้น listing", or equivalent in the selected report language.
+- For English reports, prefer phrases like "Check before production...", "May be hard to read in the final artwork...", or "Review before listing...".
+- For Thai reports, prefer phrases like "ควรตรวจยืนยันก่อนผลิต", "อาจอ่านยากในงานจริง", or "ควรเช็กก่อนขึ้น listing".
 - Avoid phrases like "ควรออกแบบใหม่", "ดีไซน์ยังไม่ดีพอ", "layout ไม่สวย", "brand ดูไม่ premium", or broad redesign language.
 
 Output:
