@@ -45,6 +45,9 @@ Local preview build:
 npm run build:cloudflare
 ```
 
+This build runs from a temporary copy that excludes `.env*` files and strips known sensitive env names from the build process.
+Do not run `opennextjs-cloudflare build` directly from the project root while `.env.local` contains real secrets.
+
 Local Cloudflare preview:
 
 ```sh
@@ -58,6 +61,7 @@ npm run deploy:cloudflare
 ```
 
 `@opennextjs/cloudflare` and `wrangler` are pinned as dev dependencies so Cloudflare builds use the lockfile version.
+`preview_urls` is disabled in `wrangler.jsonc`; keep `workers_dev` enabled for the single preview URL.
 
 ## Required Cloudflare environment names
 

@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "build:cloudflare": "opennextjs-cloudflare build",
+    "build:cloudflare": "node scripts/build-cloudflare-sanitized.mjs",
+    "build:cloudflare:direct": "opennextjs-cloudflare build",
     "preview:cloudflare": "npm run build:cloudflare && opennextjs-cloudflare preview",
     "deploy:cloudflare": "npm run build:cloudflare && opennextjs-cloudflare deploy",
     "start": "next start",
