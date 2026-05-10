@@ -20,8 +20,10 @@
     "zod": "latest"
   },
   "devDependencies": {
+    "@opennextjs/cloudflare": "^1.19.8",
     "eslint": "latest",
-    "eslint-config-next": "latest"
+    "eslint-config-next": "latest",
+    "wrangler": "^4.90.0"
   },
   "engines": {
     "node": ">=20"
