@@ -359,7 +359,6 @@ export async function POST(request) {
 
       const response = await openai.chat.completions.create({
         model,
-        temperature: 0.2,
         response_format: {
           type: "json_schema",
           json_schema: {
@@ -509,7 +508,6 @@ export async function POST(request) {
 
     const response = await openai.chat.completions.create({
       model,
-      temperature: 0.2,
       response_format: {
         type: "json_schema",
         json_schema: {
