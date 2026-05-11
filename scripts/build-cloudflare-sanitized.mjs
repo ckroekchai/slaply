@@ -10,10 +10,6 @@ const tempRoot = path.join(tmpdir(), "slaply-cloudflare-build");
 const secretEnvNames = [
   "NEXT_PUBLIC_SITE_URL",
   "SCAN_PRICE_THB",
-  "NEXT_PUBLIC_SUPABASE_URL",
-  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-  "SUPABASE_SERVICE_ROLE_KEY",
-  "SUPABASE_STORAGE_BUCKET",
   "DATA_BACKEND",
   "MOCK_AI_SCAN",
   "OPENAI_API_KEY",

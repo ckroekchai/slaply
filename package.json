@@ -10,12 +10,9 @@
     "preview:cloudflare": "npm run build:cloudflare && opennextjs-cloudflare preview",
     "deploy:cloudflare": "npm run build:cloudflare && opennextjs-cloudflare deploy --env=\"\"",
     "deploy:cloudflare:production": "npm run build:cloudflare && opennextjs-cloudflare deploy --env production",
-    "migrate:cloudflare:dry-run": "node scripts/migrate-supabase-to-cloudflare.mjs",
-    "start": "next start",
-    "lint": "next lint"
+    "start": "next start"
   },
   "dependencies": {
-    "@supabase/supabase-js": "latest",
     "next": "latest",
     "openai": "latest",
     "react": "latest",
@@ -24,8 +21,6 @@
   },
   "devDependencies": {
     "@opennextjs/cloudflare": "^1.19.8",
-    "eslint": "latest",
-    "eslint-config-next": "latest",
     "wrangler": "^4.90.0"
   },
   "engines": {

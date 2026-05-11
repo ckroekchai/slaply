@@ -1,31 +1,56 @@
 # Slaply
 
-Phase 1 production build for `slaply.co`.
+Instant AI packaging audit for `slaply.co`.
 
-Product: Instant AI Packaging Audit.
+## Current Production Stack
 
-Current MVP flow:
+- Next.js App Router
+- Cloudflare Workers via OpenNext
+- Cloudflare D1 for scan, payment, event, and cost records
+- Cloudflare R2 for uploaded artwork
+- OpenAI vision scan locked to `gpt-5.4-mini`
+- PromptPay QR payment flow with manual admin unlock
 
-Landing -> Upload artwork -> AI scan -> Free preview -> PromptPay QR -> hidden guidance reveal
+## Core Flow
 
-Current build status lives in `SLAPLY_PHASE1_NEXT_STEPS.md`.
+Landing -> Upload artwork -> AI scan -> Free preview -> PromptPay QR -> full report unlock
 
-Required private env values live in `.env.local` and must not be committed.
-Run `supabase/schema.sql` in the Supabase SQL editor before testing uploads.
+## Local Commands
 
-Use `MOCK_AI_SCAN=true` while OpenAI billing is not enabled. The scan flow will return a production-shaped mock report
-and will not call OpenAI. Switch to `MOCK_AI_SCAN=false` with a real `OPENAI_API_KEY` when ready.
+```sh
+npm run dev
+npm run build
+npm run build:cloudflare
+npm run preview:cloudflare
+```
 
-For the first PromptPay MVP, add:
+Production deploy:
+
+```sh
+npm run deploy:cloudflare:production
+```
+
+Required private values should live in local env files or Cloudflare secrets only. Do not commit secret values.
+
+## Required Runtime Configuration
 
 ```env
+NEXT_PUBLIC_SITE_URL=https://slaply.co
+SCAN_PRICE_THB=399
+MOCK_AI_SCAN=false
+OPENAI_API_KEY=
+OPENAI_VISION_MODEL=gpt-5.4-mini
 PAYMENT_GATEWAY=promptpay_qr
 PROMPTPAY_ACCOUNT_NAME=
+REPORT_FROM_EMAIL=reports@slaply.co
 ADMIN_UNLOCK_TOKEN=
 ```
 
-The PromptPay QR shown to customers is the fixed image in `public/slaply-promptpay-qr.jpg`.
-Until a real PromptPay callback is connected, the report page keeps hidden guidance blurred after the QR is generated,
-then reveals it with a 10-second confirmation countdown. Manual admin unlock remains available at `/admin/unlock`.
+Cloudflare bindings are defined in `wrangler.jsonc`:
 
-Deployment details live in `docs/PRODUCTION_DEPLOYMENT.md`.
+- `SLAPLY_DB`
+- `SLAPLY_UPLOADS`
+- `WORKER_SELF_REFERENCE`
+- `ASSETS`
+
+See `docs/CLOUDFLARE_MIGRATION.md` for current Cloudflare operation notes.

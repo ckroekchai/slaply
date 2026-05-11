@@ -5,7 +5,6 @@ import { auditJsonSchema, auditResultSchema } from "../../../lib/ai-audit-schema
 import { getCloudflareDataStore, isCloudflareDataEnabled } from "../../../lib/cloudflare-data";
 import { buildMockAuditResult, isMockAiScanEnabled, mockAiModel } from "../../../lib/mock-ai-scan";
 import { formatProductCategory } from "../../../lib/scan-form-options";
-import { getStorageBucket, getSupabaseServerClient } from "../../../lib/supabase-server";
 
 export const runtime = "nodejs";
 
@@ -283,25 +282,6 @@ function sanitizeAiErrorMessage(message) {
   return message.replace(/sk-[A-Za-z0-9_*.-]+/g, "[redacted OpenAI key]");
 }
 
-async function loadImageDataUrl(supabase, scan) {
-  if (!scan.image_storage_path) {
-    throw new Error("Scan is missing image_storage_path.");
-  }
-
-  const { data, error } = await supabase.storage
-    .from(getStorageBucket())
-    .download(scan.image_storage_path);
-
-  if (error || !data) {
-    throw new Error("Could not download scan image.");
-  }
-
-  const arrayBuffer = await data.arrayBuffer();
-  const mimeType = data.type || (scan.image_storage_path.endsWith(".png") ? "image/png" : "image/jpeg");
-  const base64 = Buffer.from(arrayBuffer).toString("base64");
-  return `data:${mimeType};base64,${base64}`;
-}
-
 export async function POST(request) {
   let scanId;
   const shouldRedirect = wantsHtmlRedirect(request);
@@ -324,170 +304,22 @@ export async function POST(request) {
     return NextResponse.json({ ok: false, error: "Missing scan_id." }, { status: 400 });
   }
 
-  if (isCloudflareDataEnabled()) {
-    const store = await getCloudflareDataStore();
-    const useMock = isMockAiScanEnabled();
-    const model = useMock ? mockAiModel : getLiveModel();
-    const scan = await store.getScan(scanId);
-    const startedAt = Date.now();
-
-    if (!scan) {
-      return NextResponse.json({ ok: false, error: "Scan not found." }, { status: 404 });
-    }
-
-    await store.markScanScanning(scanId);
-    await store.insertEvent({
-      scan_id: scanId,
-      customer_email: scan.customer_email,
-      event_name: "scan_started",
-      event_data: { model, mock: useMock }
-    });
-
-    try {
-      if (useMock) {
-        const validated = auditResultSchema.parse(buildMockAuditResult(scan));
-        await store.markScanPreviewReady(scanId, {
-          model,
-          rawOutput: {
-            mock: true,
-            reason: process.env.MOCK_AI_SCAN === "true" ? "MOCK_AI_SCAN=true" : "OPENAI_API_KEY missing"
-          },
-          validated
-        });
-        await store.insertScanCost({
-          scanId,
-          model,
-          inputTokens: 0,
-          outputTokens: 0,
-          estimatedAiCostUsd: 0,
-          processingTimeMs: Date.now() - startedAt
-        });
-
-        await store.insertEvent({
-          scan_id: scanId,
-          customer_email: scan.customer_email,
-          event_name: "scan_completed",
-          event_data: {
-            model,
-            mock: true,
-            overall_score: validated.overall_score,
-            readiness_level: validated.readiness_level
-          }
-        });
-
-        if (shouldRedirect) {
-          return redirectToReport(request, scanId, { scanned: "1" });
-        }
-
-        return NextResponse.json({ ok: true, mock: true, scan_id: scanId, result: validated });
-      }
-
-      if (!process.env.OPENAI_API_KEY) {
-        throw new Error("Missing OPENAI_API_KEY.");
-      }
-
-      const imageDataUrl = await store.getScanImageDataUrl(scan);
-      const openai = getOpenAiClient();
-      const imageDetail = getOpenAiImageDetail();
-
-      const response = await openai.chat.completions.create({
-        model,
-        ...getOpenAiRequestOptions(model),
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "slaply_packaging_audit",
-            strict: true,
-            schema: auditJsonSchema
-          }
-        },
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          {
-            role: "user",
-            content: [
-              { type: "text", text: buildUserPrompt(scan) },
-              { type: "image_url", image_url: { url: imageDataUrl, detail: imageDetail } }
-            ]
-          }
-        ]
-      });
-
-      const content = response.choices?.[0]?.message?.content;
-      const parsedJson = JSON.parse(content);
-      const validated = auditResultSchema.parse(normalizeAuditResult(parsedJson));
-      const usage = response.usage || {};
-
-      await store.markScanPreviewReady(scanId, { model, rawOutput: response, validated });
-      await store.insertScanCost({
-        scanId,
-        model,
-        inputTokens: usage.prompt_tokens || null,
-        outputTokens: usage.completion_tokens || null,
-        estimatedAiCostUsd: estimateAiCostUsd(usage),
-        processingTimeMs: Date.now() - startedAt
-      });
-      await store.insertEvent({
-        scan_id: scanId,
-        customer_email: scan.customer_email,
-        event_name: "scan_completed",
-        event_data: {
-          model,
-          overall_score: validated.overall_score,
-          readiness_level: validated.readiness_level
-        }
-      });
-
-      if (shouldRedirect) {
-        return redirectToReport(request, scanId, { scanned: "1" });
-      }
-
-      return NextResponse.json({ ok: true, scan_id: scanId, result: validated });
-    } catch (error) {
-      const message = sanitizeAiErrorMessage(error instanceof Error ? error.message : "AI scan failed.");
-
-      await store.markScanFailed(scanId, message);
-      await store.insertScanCost({
-        scanId,
-        model,
-        processingTimeMs: Date.now() - startedAt,
-        errorReason: message
-      });
-      await store.insertEvent({
-        scan_id: scanId,
-        customer_email: scan.customer_email,
-        event_name: "scan_failed",
-        event_data: { model, message }
-      });
-
-      if (shouldRedirect) {
-        return redirectToReport(request, scanId, { error: message });
-      }
-
-      return NextResponse.json({ ok: false, error: message }, { status: 500 });
-    }
+  if (!isCloudflareDataEnabled()) {
+    return NextResponse.json({ ok: false, error: "Cloudflare scan backend is not enabled." }, { status: 500 });
   }
 
-  const supabase = getSupabaseServerClient();
+  const store = await getCloudflareDataStore();
   const useMock = isMockAiScanEnabled();
   const model = useMock ? mockAiModel : getLiveModel();
+  const scan = await store.getScan(scanId);
+  const startedAt = Date.now();
 
-  const { data: scan, error: scanError } = await supabase
-    .from("scans")
-    .select("*")
-    .eq("id", scanId)
-    .single();
-
-  if (scanError || !scan) {
+  if (!scan) {
     return NextResponse.json({ ok: false, error: "Scan not found." }, { status: 404 });
   }
 
-  await supabase
-    .from("scans")
-    .update({ scan_status: "scanning", error_message: null })
-    .eq("id", scanId);
-
-  await supabase.from("events").insert({
+  await store.markScanScanning(scanId);
+  await store.insertEvent({
     scan_id: scanId,
     customer_email: scan.customer_email,
     event_name: "scan_started",
@@ -497,24 +329,23 @@ export async function POST(request) {
   try {
     if (useMock) {
       const validated = auditResultSchema.parse(buildMockAuditResult(scan));
-
-      await supabase
-        .from("scans")
-        .update({
-          scan_status: "preview_ready",
-          ai_model: model,
-          ai_raw_output: {
-            mock: true,
-            reason: process.env.MOCK_AI_SCAN === "true" ? "MOCK_AI_SCAN=true" : "OPENAI_API_KEY missing"
-          },
-          ai_validated_output: validated,
-          overall_score: validated.overall_score,
-          readiness_level: validated.readiness_level,
-          error_message: null
-        })
-        .eq("id", scanId);
-
-      await supabase.from("events").insert({
+      await store.markScanPreviewReady(scanId, {
+        model,
+        rawOutput: {
+          mock: true,
+          reason: process.env.MOCK_AI_SCAN === "true" ? "MOCK_AI_SCAN=true" : "OPENAI_API_KEY missing"
+        },
+        validated
+      });
+      await store.insertScanCost({
+        scanId,
+        model,
+        inputTokens: 0,
+        outputTokens: 0,
+        estimatedAiCostUsd: 0,
+        processingTimeMs: Date.now() - startedAt
+      });
+      await store.insertEvent({
         scan_id: scanId,
         customer_email: scan.customer_email,
         event_name: "scan_completed",
@@ -537,7 +368,7 @@ export async function POST(request) {
       throw new Error("Missing OPENAI_API_KEY.");
     }
 
-    const imageDataUrl = await loadImageDataUrl(supabase, scan);
+    const imageDataUrl = await store.getScanImageDataUrl(scan);
     const openai = getOpenAiClient();
     const imageDetail = getOpenAiImageDetail();
 
@@ -567,21 +398,18 @@ export async function POST(request) {
     const content = response.choices?.[0]?.message?.content;
     const parsedJson = JSON.parse(content);
     const validated = auditResultSchema.parse(normalizeAuditResult(parsedJson));
+    const usage = response.usage || {};
 
-    await supabase
-      .from("scans")
-      .update({
-        scan_status: "preview_ready",
-        ai_model: model,
-        ai_raw_output: response,
-        ai_validated_output: validated,
-        overall_score: validated.overall_score,
-        readiness_level: validated.readiness_level,
-        error_message: null
-      })
-      .eq("id", scanId);
-
-    await supabase.from("events").insert({
+    await store.markScanPreviewReady(scanId, { model, rawOutput: response, validated });
+    await store.insertScanCost({
+      scanId,
+      model,
+      inputTokens: usage.prompt_tokens || null,
+      outputTokens: usage.completion_tokens || null,
+      estimatedAiCostUsd: estimateAiCostUsd(usage),
+      processingTimeMs: Date.now() - startedAt
+    });
+    await store.insertEvent({
       scan_id: scanId,
       customer_email: scan.customer_email,
       event_name: "scan_completed",
@@ -600,15 +428,14 @@ export async function POST(request) {
   } catch (error) {
     const message = sanitizeAiErrorMessage(error instanceof Error ? error.message : "AI scan failed.");
 
-    await supabase
-      .from("scans")
-      .update({
-        scan_status: "failed",
-        error_message: message
-      })
-      .eq("id", scanId);
-
-    await supabase.from("events").insert({
+    await store.markScanFailed(scanId, message);
+    await store.insertScanCost({
+      scanId,
+      model,
+      processingTimeMs: Date.now() - startedAt,
+      errorReason: message
+    });
+    await store.insertEvent({
       scan_id: scanId,
       customer_email: scan.customer_email,
       event_name: "scan_failed",

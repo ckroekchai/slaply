@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { getCloudflareDataStore, isCloudflareDataEnabled } from "../../../lib/cloudflare-data";
-import { getStorageBucket, getSupabaseServerClient } from "../../../lib/supabase-server";
 import { scanContextSchema, validateUploadFile } from "../../../lib/scan-validation";
 
 export const runtime = "nodejs";
@@ -49,93 +48,22 @@ export async function POST(request) {
   }
 
   const scanId = crypto.randomUUID();
-  const bucket = getStorageBucket();
   const context = parsed.data;
   const extension = image.type === "image/png" ? "png" : "jpg";
   const storagePath = `${scanId}/${Date.now()}-${safeFileName(image.name)}.${extension}`;
 
-  if (isCloudflareDataEnabled()) {
-    try {
-      const store = await getCloudflareDataStore();
-      await store.createScan({ scanId, image, context, storagePath });
-      const redirectUrl = new URL(`/scan/${scanId}`, request.url);
-      redirectUrl.searchParams.set("created", "1");
-      return NextResponse.redirect(redirectUrl, { status: 303 });
-    } catch (error) {
-      console.error("Cloudflare scan create failed", error);
-      return redirectToScan(request, "Upload failed. Please try again with a JPG or PNG image.");
-    }
+  if (!isCloudflareDataEnabled()) {
+    return redirectToScan(request, "Cloudflare upload backend is not enabled.");
   }
 
-  const supabase = getSupabaseServerClient();
-  const fileBuffer = await image.arrayBuffer();
-
-  const { data: publicUrlData } = supabase.storage.from(bucket).getPublicUrl(storagePath);
-
-  const { error: uploadSupabaseError } = await supabase.storage
-    .from(bucket)
-    .upload(storagePath, fileBuffer, {
-      contentType: image.type,
-      upsert: false
-    });
-
-  if (uploadSupabaseError) {
+  try {
+    const store = await getCloudflareDataStore();
+    await store.createScan({ scanId, image, context, storagePath });
+    const redirectUrl = new URL(`/scan/${scanId}`, request.url);
+    redirectUrl.searchParams.set("created", "1");
+    return NextResponse.redirect(redirectUrl, { status: 303 });
+  } catch (error) {
+    console.error("Cloudflare scan create failed", error);
     return redirectToScan(request, "Upload failed. Please try again with a JPG or PNG image.");
   }
-
-  const { data: customer, error: customerError } = await supabase
-    .from("customers")
-    .insert({
-      email: context.email,
-      country: "TH"
-    })
-    .select("id")
-    .single();
-
-  if (customerError) {
-    return redirectToScan(request, "Could not create customer record.");
-  }
-
-  const { error: scanError } = await supabase.from("scans").insert({
-    id: scanId,
-    customer_id: customer.id,
-    customer_email: context.email,
-    image_url: publicUrlData.publicUrl,
-    image_storage_path: storagePath,
-    product_category: context.product_category,
-    sales_channel: null,
-    target_customer: null,
-    price_tier: null,
-    main_concern: null,
-    launch_stage: null,
-    language: context.language,
-    scan_status: "uploaded",
-    payment_status: "unpaid"
-  });
-
-  if (scanError) {
-    return redirectToScan(request, "Could not create scan record.");
-  }
-
-  await supabase.from("events").insert([
-    {
-      scan_id: scanId,
-      customer_email: context.email,
-      event_name: "image_uploaded",
-      event_data: { file_type: image.type, file_size: image.size }
-    },
-    {
-      scan_id: scanId,
-      customer_email: context.email,
-      event_name: "form_completed",
-      event_data: {
-        product_category: context.product_category,
-        language: context.language
-      }
-    }
-  ]);
-
-  const redirectUrl = new URL(`/scan/${scanId}`, request.url);
-  redirectUrl.searchParams.set("created", "1");
-  return NextResponse.redirect(redirectUrl, { status: 303 });
 }
