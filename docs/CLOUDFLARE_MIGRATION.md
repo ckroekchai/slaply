@@ -136,6 +136,11 @@ Set values in Cloudflare without exposing them in reports:
 - `MOCK_AI_SCAN`
 - `OPENAI_API_KEY`
 - `OPENAI_VISION_MODEL`
+- `OPENAI_IMAGE_DETAIL` (optional, defaults to `auto`)
+- `OPENAI_MAX_COMPLETION_TOKENS` (optional latency/cost guard)
+- `OPENAI_REASONING_EFFORT` (optional GPT-5 latency guard)
+- `OPENAI_SERVICE_TIER` (optional OpenAI processing tier)
+- `OPENAI_VERBOSITY` (optional GPT-5 output length guard)
 - `OPENAI_BASE_URL` (optional, for Cloudflare AI Gateway)
 - `OPENAI_INPUT_COST_PER_MILLION_TOKENS` (optional cost estimate)
 - `OPENAI_OUTPUT_COST_PER_MILLION_TOKENS` (optional cost estimate)

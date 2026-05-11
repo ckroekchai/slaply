@@ -34,6 +34,9 @@ Boundaries:
 - If the selected report language is English, every customer-facing explanation must be English prose. Thai text is allowed only when it is an exact quote from the artwork.
 - Return only structured JSON matching the schema.`;
 
+const allowedImageDetails = new Set(["auto", "low", "high"]);
+const allowedServiceTiers = new Set(["auto", "default", "flex", "scale", "priority"]);
+
 function buildUserPrompt(scan) {
   const optional = (value) => value || "Not provided";
 
@@ -183,6 +186,8 @@ Output:
 - Return only structured JSON matching the schema.
 - Do not add fields that are not in the schema.
 - Use the schema's summary, recommendation, priority, next-step, or equivalent fields to provide concise pre-flight guidance.
+- Keep every customer-facing field concise. Prefer one short sentence for summary, why_it_matters, recommendation, conversion recommendation details, priority reasons, next steps, paid report section body, and handoff note.
+- Do not add explanatory filler, broad strategy, or long paragraph-style report writing.
 - Do not include broad conversion strategy, sample report copy, or redesign recommendations unless the schema explicitly supports them and they are tied to a concrete pre-flight risk.`;
 }
 
@@ -198,6 +203,32 @@ function getOpenAiClient() {
   }
 
   return new OpenAI(options);
+}
+
+function getOpenAiImageDetail() {
+  const detail = process.env.OPENAI_IMAGE_DETAIL || "auto";
+  return allowedImageDetails.has(detail) ? detail : "auto";
+}
+
+function getOpenAiRequestOptions(model) {
+  const options = {};
+  const maxCompletionTokens = Number(process.env.OPENAI_MAX_COMPLETION_TOKENS || 0);
+  const serviceTier = process.env.OPENAI_SERVICE_TIER;
+
+  if (Number.isFinite(maxCompletionTokens) && maxCompletionTokens > 0) {
+    options.max_completion_tokens = Math.floor(maxCompletionTokens);
+  }
+
+  if (allowedServiceTiers.has(serviceTier)) {
+    options.service_tier = serviceTier;
+  }
+
+  if (/^gpt-5/i.test(model)) {
+    options.reasoning_effort = process.env.OPENAI_REASONING_EFFORT || "minimal";
+    options.verbosity = process.env.OPENAI_VERBOSITY || "low";
+  }
+
+  return options;
 }
 
 function estimateAiCostUsd(usage) {
@@ -356,9 +387,11 @@ export async function POST(request) {
 
       const imageDataUrl = await store.getScanImageDataUrl(scan);
       const openai = getOpenAiClient();
+      const imageDetail = getOpenAiImageDetail();
 
       const response = await openai.chat.completions.create({
         model,
+        ...getOpenAiRequestOptions(model),
         response_format: {
           type: "json_schema",
           json_schema: {
@@ -373,7 +406,7 @@ export async function POST(request) {
             role: "user",
             content: [
               { type: "text", text: buildUserPrompt(scan) },
-              { type: "image_url", image_url: { url: imageDataUrl } }
+              { type: "image_url", image_url: { url: imageDataUrl, detail: imageDetail } }
             ]
           }
         ]
@@ -505,9 +538,11 @@ export async function POST(request) {
 
     const imageDataUrl = await loadImageDataUrl(supabase, scan);
     const openai = getOpenAiClient();
+    const imageDetail = getOpenAiImageDetail();
 
     const response = await openai.chat.completions.create({
       model,
+      ...getOpenAiRequestOptions(model),
       response_format: {
         type: "json_schema",
         json_schema: {
@@ -522,7 +557,7 @@ export async function POST(request) {
           role: "user",
           content: [
             { type: "text", text: buildUserPrompt(scan) },
-            { type: "image_url", image_url: { url: imageDataUrl } }
+            { type: "image_url", image_url: { url: imageDataUrl, detail: imageDetail } }
           ]
         }
       ]

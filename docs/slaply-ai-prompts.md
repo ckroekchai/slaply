@@ -199,6 +199,8 @@ Output:
 - Return only structured JSON matching the schema.
 - Do not add fields that are not in the schema.
 - Use the schema's summary, recommendation, priority, next-step, or equivalent fields to provide concise pre-flight guidance.
+- Keep every customer-facing field concise. Prefer one short sentence for summary, why_it_matters, recommendation, conversion recommendation details, priority reasons, next steps, paid report section body, and handoff note.
+- Do not add explanatory filler, broad strategy, or long paragraph-style report writing.
 - Do not include broad conversion strategy, sample report copy, or redesign recommendations unless the schema explicitly supports them and they are tied to a concrete pre-flight risk.
 ```
 
