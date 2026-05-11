@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { getIssueCounts, inferIssueType, sortIssuesForReport } from "../../../lib/audit-issue-utils";
 import { auditJsonSchema, auditResultSchema } from "../../../lib/ai-audit-schema";
+import { getCloudflareDataStore, isCloudflareDataEnabled } from "../../../lib/cloudflare-data";
 import { buildMockAuditResult, isMockAiScanEnabled, mockAiModel } from "../../../lib/mock-ai-scan";
 import { formatProductCategory } from "../../../lib/scan-form-options";
 import { getStorageBucket, getSupabaseServerClient } from "../../../lib/supabase-server";
@@ -189,6 +190,31 @@ function getLiveModel() {
   return process.env.OPENAI_VISION_MODEL || "gpt-4.1-mini";
 }
 
+function getOpenAiClient() {
+  const options = { apiKey: process.env.OPENAI_API_KEY };
+
+  if (process.env.OPENAI_BASE_URL) {
+    options.baseURL = process.env.OPENAI_BASE_URL;
+  }
+
+  return new OpenAI(options);
+}
+
+function estimateAiCostUsd(usage) {
+  if (!usage) return null;
+
+  const inputRate = Number(process.env.OPENAI_INPUT_COST_PER_MILLION_TOKENS || 0);
+  const outputRate = Number(process.env.OPENAI_OUTPUT_COST_PER_MILLION_TOKENS || 0);
+
+  if (!Number.isFinite(inputRate) || !Number.isFinite(outputRate) || (inputRate <= 0 && outputRate <= 0)) {
+    return null;
+  }
+
+  const inputTokens = usage.prompt_tokens || 0;
+  const outputTokens = usage.completion_tokens || 0;
+  return Number((((inputTokens * inputRate) + (outputTokens * outputRate)) / 1_000_000).toFixed(8));
+}
+
 function normalizeAuditResult(result) {
   const issues = sortIssuesForReport(result.issues || []).map((issue, index) => ({
     ...issue,
@@ -215,6 +241,14 @@ function redirectToReport(request, scanId, params = {}) {
   });
 
   return NextResponse.redirect(url, { status: 303 });
+}
+
+function sanitizeAiErrorMessage(message) {
+  if (/incorrect api key|api key provided|401/i.test(message)) {
+    return "OpenAI authentication failed. Check OPENAI_API_KEY.";
+  }
+
+  return message.replace(/sk-[A-Za-z0-9_*.-]+/g, "[redacted OpenAI key]");
 }
 
 async function loadImageDataUrl(supabase, scan) {
@@ -256,6 +290,149 @@ export async function POST(request) {
 
   if (!scanId) {
     return NextResponse.json({ ok: false, error: "Missing scan_id." }, { status: 400 });
+  }
+
+  if (isCloudflareDataEnabled()) {
+    const store = await getCloudflareDataStore();
+    const useMock = isMockAiScanEnabled();
+    const model = useMock ? mockAiModel : getLiveModel();
+    const scan = await store.getScan(scanId);
+    const startedAt = Date.now();
+
+    if (!scan) {
+      return NextResponse.json({ ok: false, error: "Scan not found." }, { status: 404 });
+    }
+
+    await store.markScanScanning(scanId);
+    await store.insertEvent({
+      scan_id: scanId,
+      customer_email: scan.customer_email,
+      event_name: "scan_started",
+      event_data: { model, mock: useMock }
+    });
+
+    try {
+      if (useMock) {
+        const validated = auditResultSchema.parse(buildMockAuditResult(scan));
+        await store.markScanPreviewReady(scanId, {
+          model,
+          rawOutput: {
+            mock: true,
+            reason: process.env.MOCK_AI_SCAN === "true" ? "MOCK_AI_SCAN=true" : "OPENAI_API_KEY missing"
+          },
+          validated
+        });
+        await store.insertScanCost({
+          scanId,
+          model,
+          inputTokens: 0,
+          outputTokens: 0,
+          estimatedAiCostUsd: 0,
+          processingTimeMs: Date.now() - startedAt
+        });
+
+        await store.insertEvent({
+          scan_id: scanId,
+          customer_email: scan.customer_email,
+          event_name: "scan_completed",
+          event_data: {
+            model,
+            mock: true,
+            overall_score: validated.overall_score,
+            readiness_level: validated.readiness_level
+          }
+        });
+
+        if (shouldRedirect) {
+          return redirectToReport(request, scanId, { scanned: "1" });
+        }
+
+        return NextResponse.json({ ok: true, mock: true, scan_id: scanId, result: validated });
+      }
+
+      if (!process.env.OPENAI_API_KEY) {
+        throw new Error("Missing OPENAI_API_KEY.");
+      }
+
+      const imageDataUrl = await store.getScanImageDataUrl(scan);
+      const openai = getOpenAiClient();
+
+      const response = await openai.chat.completions.create({
+        model,
+        temperature: 0.2,
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "slaply_packaging_audit",
+            strict: true,
+            schema: auditJsonSchema
+          }
+        },
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: buildUserPrompt(scan) },
+              { type: "image_url", image_url: { url: imageDataUrl } }
+            ]
+          }
+        ]
+      });
+
+      const content = response.choices?.[0]?.message?.content;
+      const parsedJson = JSON.parse(content);
+      const validated = auditResultSchema.parse(normalizeAuditResult(parsedJson));
+      const usage = response.usage || {};
+
+      await store.markScanPreviewReady(scanId, { model, rawOutput: response, validated });
+      await store.insertScanCost({
+        scanId,
+        model,
+        inputTokens: usage.prompt_tokens || null,
+        outputTokens: usage.completion_tokens || null,
+        estimatedAiCostUsd: estimateAiCostUsd(usage),
+        processingTimeMs: Date.now() - startedAt
+      });
+      await store.insertEvent({
+        scan_id: scanId,
+        customer_email: scan.customer_email,
+        event_name: "scan_completed",
+        event_data: {
+          model,
+          overall_score: validated.overall_score,
+          readiness_level: validated.readiness_level
+        }
+      });
+
+      if (shouldRedirect) {
+        return redirectToReport(request, scanId, { scanned: "1" });
+      }
+
+      return NextResponse.json({ ok: true, scan_id: scanId, result: validated });
+    } catch (error) {
+      const message = sanitizeAiErrorMessage(error instanceof Error ? error.message : "AI scan failed.");
+
+      await store.markScanFailed(scanId, message);
+      await store.insertScanCost({
+        scanId,
+        model,
+        processingTimeMs: Date.now() - startedAt,
+        errorReason: message
+      });
+      await store.insertEvent({
+        scan_id: scanId,
+        customer_email: scan.customer_email,
+        event_name: "scan_failed",
+        event_data: { model, message }
+      });
+
+      if (shouldRedirect) {
+        return redirectToReport(request, scanId, { error: message });
+      }
+
+      return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    }
   }
 
   const supabase = getSupabaseServerClient();
@@ -328,7 +505,7 @@ export async function POST(request) {
     }
 
     const imageDataUrl = await loadImageDataUrl(supabase, scan);
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const openai = getOpenAiClient();
 
     const response = await openai.chat.completions.create({
       model,
@@ -387,7 +564,7 @@ export async function POST(request) {
 
     return NextResponse.json({ ok: true, scan_id: scanId, result: validated });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "AI scan failed.";
+    const message = sanitizeAiErrorMessage(error instanceof Error ? error.message : "AI scan failed.");
 
     await supabase
       .from("scans")
