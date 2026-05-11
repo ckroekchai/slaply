@@ -1,10 +1,14 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
+  "account_id": "bffc10ee3c60e42c6260c87ae69f710a",
   "name": "slaply-cloudflare-preview",
   "main": ".open-next/worker.js",
   "workers_dev": true,
   "preview_urls": false,
   "compatibility_date": "2026-05-10",
+  "vars": {
+    "DATA_BACKEND": "cloudflare"
+  },
   "compatibility_flags": [
     "nodejs_compat",
     "global_fetch_strictly_public"
@@ -19,6 +23,52 @@
       "service": "slaply-cloudflare-preview"
     }
   ],
+  "d1_databases": [
+    {
+      "binding": "SLAPLY_DB",
+      "database_name": "slaply-preview-db",
+      "database_id": "b2f5fa0a-6c21-4782-908a-add982b830ef"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "SLAPLY_UPLOADS",
+      "bucket_name": "slaply-preview-uploads"
+    }
+  ],
+  "env": {
+    "production": {
+      "name": "slaply-cloudflare-production",
+      "workers_dev": true,
+      "preview_urls": false,
+      "routes": [
+        "www.slaply.co/*",
+        "slaply.co/*"
+      ],
+      "vars": {
+        "DATA_BACKEND": "cloudflare"
+      },
+      "services": [
+        {
+          "binding": "WORKER_SELF_REFERENCE",
+          "service": "slaply-cloudflare-production"
+        }
+      ],
+      "d1_databases": [
+        {
+          "binding": "SLAPLY_DB",
+          "database_name": "slaply-production-db",
+          "database_id": "3c347d04-e5bd-4b83-80d9-4878bb5553e4"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "SLAPLY_UPLOADS",
+          "bucket_name": "slaply-production-uploads"
+        }
+      ]
+    }
+  },
   "observability": {
     "enabled": true
   }

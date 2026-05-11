@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getCloudflareDataStore, isCloudflareDataEnabled } from "../../../lib/cloudflare-data";
 import { slaplyConfig } from "../../../lib/slaply-config";
 import { getSupabaseServerClient } from "../../../lib/supabase-server";
 
@@ -45,6 +46,26 @@ export async function POST(request) {
     const error = "Invalid scan ID or admin token.";
     if (shouldRedirect) return redirectToAdmin(request, { error });
     return NextResponse.json({ ok: false, error }, { status: 401 });
+  }
+
+  if (isCloudflareDataEnabled()) {
+    const store = await getCloudflareDataStore();
+    const scan = await store.getScan(scanId);
+
+    if (!scan) {
+      const error = "Scan not found.";
+      if (shouldRedirect) return redirectToAdmin(request, { error });
+      return NextResponse.json({ ok: false, error }, { status: 404 });
+    }
+
+    const reportUrl = `${slaplyConfig.siteUrl.replace(/\/$/, "")}/scan/${scanId}`;
+    await store.unlockScan({ scan, paymentId, reportUrl, note });
+
+    if (shouldRedirect) {
+      return NextResponse.redirect(new URL(`/scan/${scanId}?unlocked=1`, request.url), { status: 303 });
+    }
+
+    return NextResponse.json({ ok: true, scan_id: scanId, report_url: reportUrl });
   }
 
   const supabase = getSupabaseServerClient();

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getCloudflareDataStore, isCloudflareDataEnabled } from "../../../lib/cloudflare-data";
 import { getStorageBucket, getSupabaseServerClient } from "../../../lib/supabase-server";
 import { scanContextSchema, validateUploadFile } from "../../../lib/scan-validation";
 
@@ -49,10 +50,24 @@ export async function POST(request) {
 
   const scanId = crypto.randomUUID();
   const bucket = getStorageBucket();
-  const supabase = getSupabaseServerClient();
   const context = parsed.data;
   const extension = image.type === "image/png" ? "png" : "jpg";
   const storagePath = `${scanId}/${Date.now()}-${safeFileName(image.name)}.${extension}`;
+
+  if (isCloudflareDataEnabled()) {
+    try {
+      const store = await getCloudflareDataStore();
+      await store.createScan({ scanId, image, context, storagePath });
+      const redirectUrl = new URL(`/scan/${scanId}`, request.url);
+      redirectUrl.searchParams.set("created", "1");
+      return NextResponse.redirect(redirectUrl, { status: 303 });
+    } catch (error) {
+      console.error("Cloudflare scan create failed", error);
+      return redirectToScan(request, "Upload failed. Please try again with a JPG or PNG image.");
+    }
+  }
+
+  const supabase = getSupabaseServerClient();
   const fileBuffer = await image.arrayBuffer();
 
   const { data: publicUrlData } = supabase.storage.from(bucket).getPublicUrl(storagePath);

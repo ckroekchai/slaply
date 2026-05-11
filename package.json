@@ -8,7 +8,9 @@
     "build:cloudflare": "node scripts/build-cloudflare-sanitized.mjs",
     "build:cloudflare:direct": "opennextjs-cloudflare build",
     "preview:cloudflare": "npm run build:cloudflare && opennextjs-cloudflare preview",
-    "deploy:cloudflare": "npm run build:cloudflare && opennextjs-cloudflare deploy",
+    "deploy:cloudflare": "npm run build:cloudflare && opennextjs-cloudflare deploy --env=\"\"",
+    "deploy:cloudflare:production": "npm run build:cloudflare && opennextjs-cloudflare deploy --env production",
+    "migrate:cloudflare:dry-run": "node scripts/migrate-supabase-to-cloudflare.mjs",
     "start": "next start",
     "lint": "next lint"
   },
