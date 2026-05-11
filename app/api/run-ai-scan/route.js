@@ -36,6 +36,7 @@ Boundaries:
 
 const allowedImageDetails = new Set(["auto", "low", "high"]);
 const allowedServiceTiers = new Set(["auto", "default", "flex", "scale", "priority"]);
+const requiredLiveModel = "gpt-5.4-mini";
 
 function buildUserPrompt(scan) {
   const optional = (value) => value || "Not provided";
@@ -192,7 +193,7 @@ Output:
 }
 
 function getLiveModel() {
-  return process.env.OPENAI_VISION_MODEL || "gpt-4.1-mini";
+  return requiredLiveModel;
 }
 
 function getOpenAiClient() {
@@ -224,7 +225,7 @@ function getOpenAiRequestOptions(model) {
   }
 
   if (/^gpt-5/i.test(model)) {
-    options.reasoning_effort = process.env.OPENAI_REASONING_EFFORT || "minimal";
+    options.reasoning_effort = process.env.OPENAI_REASONING_EFFORT || "low";
     options.verbosity = process.env.OPENAI_VERBOSITY || "low";
   }
 

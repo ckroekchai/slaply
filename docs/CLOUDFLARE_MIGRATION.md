@@ -135,10 +135,10 @@ Set values in Cloudflare without exposing them in reports:
 - `SUPABASE_STORAGE_BUCKET`
 - `MOCK_AI_SCAN`
 - `OPENAI_API_KEY`
-- `OPENAI_VISION_MODEL`
+- `OPENAI_VISION_MODEL` (must be `gpt-5.4-mini`; app runtime is locked to this model)
 - `OPENAI_IMAGE_DETAIL` (optional, defaults to `auto`)
 - `OPENAI_MAX_COMPLETION_TOKENS` (optional latency/cost guard)
-- `OPENAI_REASONING_EFFORT` (optional GPT-5 latency guard)
+- `OPENAI_REASONING_EFFORT` (optional GPT-5 latency guard; defaults to `low`)
 - `OPENAI_SERVICE_TIER` (optional OpenAI processing tier)
 - `OPENAI_VERBOSITY` (optional GPT-5 output length guard)
 - `OPENAI_BASE_URL` (optional, for Cloudflare AI Gateway)
