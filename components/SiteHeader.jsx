@@ -1,4 +1,5 @@
 export function SiteHeader({ home = false }) {
+  const scanHref = home ? "#scan" : "/#scan";
   const steps = [
     {
       title: "Upload",
@@ -21,6 +22,43 @@ export function SiteHeader({ home = false }) {
       bullets: ["Fix yourself", "Send to designer", "Request Slaply fix"]
     }
   ];
+  const pricingPlans = [
+    {
+      title: "Free Scan",
+      description: "For a quick issue preview before you decide.",
+      price: "Free",
+      note: "Limited preview",
+      bullets: ["Issue preview", "Basic risk summary", "One artwork scan"],
+      action: "Try scan",
+      href: scanHref
+    },
+    {
+      title: "Full Report",
+      description: "For clients who need a clearer decision before production or launch.",
+      price: "THB 399",
+      note: "Per report",
+      bullets: ["Annotated issue map", "Risk and clarity scoring", "Prioritized action list"],
+      action: "Unlock report",
+      href: scanHref,
+      featured: true
+    },
+    {
+      title: "Designer Review",
+      description: "For extra confidence before print, production, or launch.",
+      price: "Request",
+      note: "Book designer review",
+      bullets: ["Designer review note", "Priority fix guidance", "No-edit review only"],
+      action: "Coming soon"
+    },
+    {
+      title: "Fix",
+      description: "For packaging that needs focused design correction.",
+      price: "Request",
+      note: "Slaply design support",
+      bullets: ["One-time edit", ".ai file needed", "Redesign quoted separately"],
+      action: "Coming soon"
+    }
+  ];
 
   return (
     <header>
@@ -32,7 +70,7 @@ export function SiteHeader({ home = false }) {
           </a>
 
           <nav className="nav-links" aria-label="Main navigation">
-            <details id="how-it-works" className="nav-menu">
+            <details id="how-it-works" className="nav-menu" name="main-nav-menu">
               <summary>How it works</summary>
               <div className="how-menu-panel" role="group" aria-label="How Slaply works">
                 <div className="how-menu-copy">
@@ -59,10 +97,49 @@ export function SiteHeader({ home = false }) {
                 </div>
               </div>
             </details>
-            <a href={home ? "#pricing" : "/#pricing"}>Pricing</a>
+            <details id="pricing" className="nav-menu nav-menu-pricing" name="main-nav-menu">
+              <summary>Pricing</summary>
+              <div className="pricing-menu-panel" role="group" aria-label="Slaply pricing">
+                <div className="pricing-menu-copy">
+                  <h2>Start with a scan. Pay only when needed.</h2>
+                  <p>
+                    Preview the issues first. If the scan helps, unlock the full report or request support only when
+                    you need it.
+                  </p>
+                </div>
+
+                <div className="pricing-menu-grid">
+                  {pricingPlans.map((plan) => (
+                    <article className={`pricing-card${plan.featured ? " featured" : ""}`} key={plan.title}>
+                      <h3>{plan.title}</h3>
+                      <p>{plan.description}</p>
+                      <div className="price">{plan.price}</div>
+                      <div className="price-note">{plan.note}</div>
+                      <ul className="pricing-list">
+                        {plan.bullets.map((bullet) => (
+                          <li key={bullet}>{bullet}</li>
+                        ))}
+                      </ul>
+                      {plan.href ? (
+                        <a href={plan.href} className={`button ${plan.featured ? "button-primary" : "button-secondary"}`}>
+                          {plan.action}
+                        </a>
+                      ) : (
+                        <span className="button button-secondary button-muted" aria-disabled="true">{plan.action}</span>
+                      )}
+                    </article>
+                  ))}
+                </div>
+
+                <div className="pricing-menu-disclaimer">
+                  Slaply is an AI visual audit for artwork-level communication only. No legal, regulatory, FDA/Thai
+                  FDA, barcode, IP, claims, or sales-performance approval.
+                </div>
+              </div>
+            </details>
           </nav>
 
-          <a href={home ? "#scan" : "/#scan"} className="nav-cta">Start scan</a>
+          <a href={scanHref} className="nav-cta">Start scan</a>
         </div>
       </div>
     </header>

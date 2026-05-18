@@ -26,7 +26,7 @@ export default async function Home({ searchParams }) {
 
               <div className="hero-actions">
                 <a href="#scan" className="button button-primary">Start scan</a>
-                <a href="#pricing" className="button button-secondary">View pricing</a>
+                <a href="#scan" className="button button-secondary">Try free scan</a>
               </div>
 
               <p className="microcopy">
@@ -95,77 +95,6 @@ export default async function Home({ searchParams }) {
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </section>
-
-        <section id="pricing">
-          <div className="container">
-            <div className="section-header">
-              <h2>Start with a scan.<br />Pay only when needed.</h2>
-              <p>
-                Slaply keeps pricing simple. Preview the issues first. If the scan helps, unlock the full report or
-                request designer support only when you need.
-              </p>
-            </div>
-
-            <div className="pricing-grid">
-              <article className="pricing-card">
-                <h3>Free Scan</h3>
-                <p>For a quick issue preview before you decide.</p>
-                <div className="price">Free</div>
-                <div className="price-note">Limited preview</div>
-                <ul className="pricing-list">
-                  <li>Issue preview</li>
-                  <li>Basic risk summary</li>
-                  <li>One artwork scan</li>
-                </ul>
-                <a href="#scan" className="button button-secondary">Try scan</a>
-              </article>
-
-              <article className="pricing-card featured">
-                <h3>Full Report</h3>
-                <p>For clients who need a clearer decision before production or launch.</p>
-                <div className="price">THB 399</div>
-                <div className="price-note">Per report</div>
-                <ul className="pricing-list">
-                  <li>Annotated issue map</li>
-                  <li>Risk and clarity scoring</li>
-                  <li>Prioritized action list</li>
-                </ul>
-                <a href="#scan" className="button button-primary">Unlock report</a>
-              </article>
-
-              <article className="pricing-card">
-                <h3>Designer Review</h3>
-                <p>For extra confidence before print, production, or launch.</p>
-                <div className="price">Request</div>
-                <div className="price-note">Book designer review</div>
-                <ul className="pricing-list">
-                  <li>Designer review note</li>
-                  <li>Priority fix guidance</li>
-                  <li>No-edit review only</li>
-                </ul>
-                <span className="button button-secondary button-muted" aria-disabled="true">Coming soon</span>
-              </article>
-
-              <article className="pricing-card">
-                <h3>Fix</h3>
-                <p>For packaging that needs focused design correction.</p>
-                <div className="price">Request</div>
-                <div className="price-note">Slaply design support</div>
-                <ul className="pricing-list">
-                  <li>One-time edit</li>
-                  <li>.ai file needed</li>
-                  <li>Redesign quoted separately</li>
-                </ul>
-                <span className="button button-secondary button-muted" aria-disabled="true">Coming soon</span>
-              </article>
-            </div>
-
-            <div className="disclaimer">
-              Slaply is an AI visual audit for artwork-level communication only.<br />It does not cover legal,
-              regulatory, FDA/Thai FDA, claims, barcode, IP, or sales-performance.
             </div>
           </div>
         </section>

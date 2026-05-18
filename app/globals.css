@@ -289,7 +289,8 @@
         transform: translateY(2px) rotate(225deg);
       }
 
-      .how-menu-panel {
+      .how-menu-panel,
+      .pricing-menu-panel {
         position: absolute;
         top: calc(100% + 18px);
         left: 50%;
@@ -308,19 +309,30 @@
         transform: translateX(-50%);
       }
 
+      .pricing-menu-panel {
+        width: min(960px, calc(100vw - 44px));
+      }
+
       .how-menu-copy {
         max-width: 560px;
         margin-bottom: 16px;
       }
 
-      .how-menu-copy h2 {
+      .pricing-menu-copy {
+        max-width: 640px;
+        margin-bottom: 16px;
+      }
+
+      .how-menu-copy h2,
+      .pricing-menu-copy h2 {
         margin: 0 0 8px;
         font-size: 28px;
         line-height: 1.08;
         letter-spacing: 0;
       }
 
-      .how-menu-copy p {
+      .how-menu-copy p,
+      .pricing-menu-copy p {
         color: rgba(29, 29, 31, 0.64);
         font-size: 14px;
         line-height: 1.45;
@@ -401,6 +413,71 @@
         background: var(--green);
         box-shadow: 0 0 0 4px rgba(50, 215, 75, 0.1);
         flex: 0 0 auto;
+      }
+
+      .pricing-menu-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        align-items: stretch;
+      }
+
+      .pricing-menu-grid .pricing-card {
+        padding: 16px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.72);
+      }
+
+      .pricing-menu-grid .pricing-card.featured {
+        transform: none;
+      }
+
+      .pricing-menu-grid .pricing-card h3 {
+        font-size: 18px;
+        line-height: 1.15;
+        letter-spacing: 0;
+      }
+
+      .pricing-menu-grid .pricing-card p {
+        min-height: 58px;
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      .pricing-menu-grid .price {
+        margin-top: 16px;
+        font-size: 26px;
+      }
+
+      .pricing-menu-grid .price-note {
+        margin-bottom: 12px;
+        font-size: 12px;
+      }
+
+      .pricing-menu-grid .pricing-list {
+        gap: 8px;
+        margin: 14px 0 18px;
+      }
+
+      .pricing-menu-grid .pricing-list li {
+        font-size: 12px;
+        line-height: 1.3;
+      }
+
+      .pricing-menu-grid .pricing-card .button {
+        min-height: 40px;
+        font-size: 13px;
+      }
+
+      .pricing-menu-disclaimer {
+        margin-top: 12px;
+        padding: 12px 14px;
+        border-radius: 18px;
+        color: rgba(29, 29, 31, 0.58);
+        font-size: 12px;
+        line-height: 1.4;
+        background: rgba(255, 255, 255, 0.54);
+        border: 1px solid rgba(255, 255, 255, 0.62);
       }
 
       .nav-cta,
@@ -1690,6 +1767,8 @@
         .step,
         .how-menu-panel,
         .how-menu-step,
+        .pricing-menu-panel,
+        .pricing-menu-disclaimer,
         .pricing-card,
         .scan-form,
         .cta-panel,
@@ -1707,7 +1786,8 @@
           grid-template-columns: 1fr;
         }
 
-        .pricing-grid {
+        .pricing-grid,
+        .pricing-menu-grid {
           grid-template-columns: repeat(2, 1fr);
         }
 
@@ -1728,7 +1808,8 @@
           margin-left: auto;
         }
 
-        .how-menu-panel {
+        .how-menu-panel,
+        .pricing-menu-panel {
           position: fixed;
           top: 78px;
           left: 22px;
@@ -1739,7 +1820,8 @@
           transform: none;
         }
 
-        .how-menu-grid {
+        .how-menu-grid,
+        .pricing-menu-grid {
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
 
@@ -1841,7 +1923,8 @@
           font-size: 12px;
         }
 
-        .how-menu-panel {
+        .how-menu-panel,
+        .pricing-menu-panel {
           top: 70px;
           left: 14px;
           right: 14px;
@@ -1849,11 +1932,13 @@
           border-radius: 24px;
         }
 
-        .how-menu-copy h2 {
+        .how-menu-copy h2,
+        .pricing-menu-copy h2 {
           font-size: 24px;
         }
 
-        .how-menu-grid {
+        .how-menu-grid,
+        .pricing-menu-grid {
           grid-template-columns: minmax(0, 1fr);
         }
 
@@ -1962,7 +2047,8 @@
 
         .score-grid,
         .process-row,
-        .pricing-grid {
+        .pricing-grid,
+        .pricing-menu-grid {
           grid-template-columns: minmax(0, 1fr);
         }
 
@@ -2027,7 +2113,8 @@
           gap: 8px;
         }
 
-        .how-menu-panel {
+        .how-menu-panel,
+        .pricing-menu-panel {
           left: 12px;
           right: 12px;
         }
