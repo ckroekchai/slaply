@@ -35,67 +35,6 @@ export default async function Home({ searchParams }) {
                 <span>✓ Food &amp; Pet product</span>
               </p>
             </div>
-
-            <div className="product-stage">
-              <div className="glass-device">
-                <div className="window">
-                  <div className="window-bar">
-                    <div className="window-title">Example Slaply report</div>
-                  </div>
-
-                  <div className="report-ui">
-                    <div className="pack-zone">
-                      <div className="pack-card artwork-card" aria-label="Sample packaging artwork">
-                        <img src="/post-1.png?v=20260507003144" alt="Sample perfume packaging artwork" />
-                        <span className="pin artwork-pin marker-one">1</span>
-                        <span className="pin artwork-pin marker-two">2</span>
-                        <span className="pin artwork-pin marker-three">3</span>
-                        <span className="pin artwork-pin marker-four">4</span>
-                      </div>
-                    </div>
-
-                    <div className="report-zone">
-                      <div className="report-head">
-                        <h3>Audit summary</h3>
-                        <span className="status-pill">Scan complete</span>
-                      </div>
-
-                      <div className="score-grid">
-                        <div className="score-card"><b>3</b><span>Text Errors</span></div>
-                        <div className="score-card"><b>2</b><span>Hierarchy</span></div>
-                        <div className="score-card"><b>5</b><span>Readability</span></div>
-                      </div>
-
-                      <div className="issue-list">
-                        <div className="issue">
-                          <div className="issue-top">
-                            <h4>1. Main benefit is hard to read</h4>
-                            <span className="severity high">High</span>
-                          </div>
-                          <p>The main product benefit is not clear enough in the visible artwork.</p>
-                        </div>
-
-                        <div className="issue">
-                          <div className="issue-top">
-                            <h4>2. Important details are hard to find</h4>
-                            <span className="severity">Medium</span>
-                          </div>
-                          <p>Key product details may be too small, low-contrast, or difficult to locate.</p>
-                        </div>
-
-                        <div className="issue">
-                          <div className="issue-top">
-                            <h4>3. Wording issue</h4>
-                            <span className="severity low">Low</span>
-                          </div>
-                          <p>Some text may be misspelled or written inconsistently.</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         </section>
 

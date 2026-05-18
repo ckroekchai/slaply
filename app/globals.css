@@ -289,6 +289,7 @@
         transform: translateY(2px) rotate(225deg);
       }
 
+      .example-menu-panel,
       .how-menu-panel,
       .pricing-menu-panel {
         position: absolute;
@@ -309,8 +310,90 @@
         transform: translateX(-50%);
       }
 
+      .example-menu-panel {
+        width: min(920px, calc(100vw - 44px));
+        padding: 14px;
+      }
+
       .pricing-menu-panel {
         width: min(960px, calc(100vw - 44px));
+      }
+
+      .example-menu-panel .window {
+        border-radius: 24px;
+      }
+
+      .example-menu-panel .window-bar {
+        height: 38px;
+      }
+
+      .example-menu-panel .report-ui {
+        grid-template-columns: 0.88fr 1.12fr;
+      }
+
+      .example-menu-panel .pack-zone,
+      .example-menu-panel .report-zone {
+        min-height: 0;
+        padding: 16px;
+      }
+
+      .example-menu-panel .pack-card.artwork-card {
+        width: min(300px, 100%);
+        height: auto;
+        aspect-ratio: 1 / 1;
+      }
+
+      .example-menu-panel .report-head {
+        align-items: center;
+        margin-bottom: 12px;
+      }
+
+      .example-menu-panel .report-head h3 {
+        font-size: 28px;
+        line-height: 1;
+        letter-spacing: 0;
+      }
+
+      .example-menu-panel .score-grid {
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .example-menu-panel .score-card {
+        padding: 10px;
+        border-radius: 16px;
+      }
+
+      .example-menu-panel .score-card b {
+        font-size: 24px;
+      }
+
+      .example-menu-panel .score-card span {
+        font-size: 11px;
+      }
+
+      .example-menu-panel .issue-list {
+        gap: 8px;
+      }
+
+      .example-menu-panel .issue {
+        padding: 10px;
+        border-radius: 16px;
+      }
+
+      .example-menu-panel .issue-top {
+        gap: 8px;
+        margin-bottom: 4px;
+      }
+
+      .example-menu-panel .issue h4 {
+        font-size: 13px;
+        letter-spacing: 0;
+      }
+
+      .example-menu-panel .issue p {
+        font-size: 12px;
+        line-height: 1.35;
       }
 
       .how-menu-copy {
@@ -1765,6 +1848,7 @@
         .score-card,
         .issue,
         .step,
+        .example-menu-panel,
         .how-menu-panel,
         .how-menu-step,
         .pricing-menu-panel,
@@ -1808,6 +1892,7 @@
           margin-left: auto;
         }
 
+        .example-menu-panel,
         .how-menu-panel,
         .pricing-menu-panel {
           position: fixed;
@@ -1820,6 +1905,7 @@
           transform: none;
         }
 
+        .example-menu-panel .report-ui,
         .how-menu-grid,
         .pricing-menu-grid {
           grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1923,6 +2009,7 @@
           font-size: 12px;
         }
 
+        .example-menu-panel,
         .how-menu-panel,
         .pricing-menu-panel {
           top: 70px;
@@ -1937,6 +2024,7 @@
           font-size: 24px;
         }
 
+        .example-menu-panel .report-ui,
         .how-menu-grid,
         .pricing-menu-grid {
           grid-template-columns: minmax(0, 1fr);
@@ -2113,10 +2201,15 @@
           gap: 8px;
         }
 
+        .example-menu-panel,
         .how-menu-panel,
         .pricing-menu-panel {
           left: 12px;
           right: 12px;
+        }
+
+        .nav-cta {
+          display: none;
         }
       }
     
