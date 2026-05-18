@@ -99,60 +99,6 @@ export default async function Home({ searchParams }) {
           </div>
         </section>
 
-        <section id="how-it-works" className="process">
-          <div className="container">
-            <div className="section-header">
-              <h2>One image. One scan.<br />One clearer decision.</h2>
-              <p>
-                Slaply is not another image generator. Upload your high quality print-ready artwork, preview the key
-                issues, then unlock the full report only when you need more detail.
-              </p>
-            </div>
-
-            <div className="process-row">
-              <article className="step">
-                <h3>Upload</h3>
-                <p>Add your high quality print-ready artwork and short product context.</p>
-                <ul className="step-bullets">
-                  <li>Print-ready artwork</li>
-                  <li>Product category</li>
-                  <li>Report language</li>
-                </ul>
-              </article>
-
-              <article className="step scan-step">
-                <h3>Scan</h3>
-                <p>AI checks text errors, missing information, readability risk, clarity, and hierarchy.</p>
-                <ul className="step-bullets">
-                  <li>Text errors</li>
-                  <li>Missing critical info</li>
-                  <li>Readability risk</li>
-                </ul>
-              </article>
-
-              <article className="step">
-                <h3>Unlock</h3>
-                <p>See an annotated preview with the key findings mapped to points on the artwork.</p>
-                <ul className="step-bullets">
-                  <li>Annotated preview</li>
-                  <li>Risk summary</li>
-                  <li>Download full report</li>
-                </ul>
-              </article>
-
-              <article className="step">
-                <h3>Take action</h3>
-                <p>Choose your next move with a clear next step: fix, hand off, or approve for launch.</p>
-                <ul className="step-bullets">
-                  <li>Fix yourself</li>
-                  <li>Send to designer</li>
-                  <li>Request Slaply fix</li>
-                </ul>
-              </article>
-            </div>
-          </div>
-        </section>
-
         <section id="pricing">
           <div className="container">
             <div className="section-header">
