@@ -255,6 +255,10 @@
         position: relative;
       }
 
+      .nav-menu-example {
+        position: static;
+      }
+
       .nav-menu summary {
         display: inline-flex;
         align-items: center;
