@@ -25,7 +25,6 @@ export default async function Home({ searchParams }) {
               </p>
 
               <div className="hero-actions">
-                <a href="#scan" className="button button-primary">Start scan</a>
                 <a href="#scan" className="button button-secondary">Try free scan</a>
               </div>
 
