@@ -259,6 +259,10 @@
         position: static;
       }
 
+      .nav-menu-pricing {
+        position: static;
+      }
+
       .nav-menu summary {
         display: inline-flex;
         align-items: center;
