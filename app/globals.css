@@ -640,7 +640,7 @@
 
       .hero {
         position: relative;
-        padding: 86px 0 92px;
+        padding: 86px 0 44px;
         overflow: hidden;
       }
 
@@ -698,7 +698,7 @@
 
       .hero-copy {
         max-width: 760px;
-        margin: 0 auto 34px;
+        margin: 0 auto;
         color: rgba(29, 29, 31, 0.7);
         font-size: clamp(19px, 2.2vw, 25px);
         line-height: 1.42;
@@ -1298,7 +1298,7 @@
       }
 
       .cta {
-        padding: 112px 0;
+        padding: 40px 0 112px;
       }
 
       .cta-panel {
@@ -2029,12 +2029,16 @@
         }
 
         .hero {
-          padding: 58px 0 62px;
+          padding: 58px 0 28px;
         }
 
         section,
         .cta {
           padding: 66px 0;
+        }
+
+        .cta {
+          padding: 28px 0 66px;
         }
 
         h1 {
