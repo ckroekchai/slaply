@@ -23,12 +23,6 @@ export default async function Home({ searchParams }) {
                 Upload your final artwork and get an AI visual audit that spots text errors, missing info, readability
                 risk, clarity, and hierarchy before you print, produce, list, or launch.
               </p>
-
-              <p className="microcopy">
-                <span>✓ Beauty product</span>
-                <span>✓ Supplement product</span>
-                <span>✓ Food &amp; Pet product</span>
-              </p>
             </div>
           </div>
         </section>

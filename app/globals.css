@@ -713,16 +713,6 @@
         margin-bottom: 18px;
       }
 
-      .microcopy {
-        display: flex;
-        justify-content: center;
-        flex-wrap: wrap;
-        gap: 22px;
-        color: rgba(29, 29, 31, 0.5);
-        font-size: 13px;
-        font-weight: 560;
-      }
-
       .product-stage {
         position: relative;
         z-index: 2;
@@ -2056,10 +2046,6 @@
         .section-header p,
         .cta-copy p {
           font-size: 18px;
-        }
-
-        .microcopy {
-          gap: 10px;
         }
 
         .product-stage {
