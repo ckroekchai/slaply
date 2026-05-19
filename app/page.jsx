@@ -24,10 +24,6 @@ export default async function Home({ searchParams }) {
                 risk, clarity, and hierarchy before you print, produce, list, or launch.
               </p>
 
-              <div className="hero-actions">
-                <a href="#scan" className="button button-secondary">Try free scan</a>
-              </div>
-
               <p className="microcopy">
                 <span>✓ Beauty product</span>
                 <span>✓ Supplement product</span>
