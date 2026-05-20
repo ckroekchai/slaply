@@ -649,6 +649,7 @@
         margin: 0 auto;
         text-align: center;
         position: relative;
+        top: -10px;
         z-index: 2;
       }
 
