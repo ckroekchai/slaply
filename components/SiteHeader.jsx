@@ -1,4 +1,39 @@
+"use client";
+
+import { useEffect } from "react";
+
 export function SiteHeader({ home = false }) {
+  useEffect(() => {
+    const closeOpenMenus = () => {
+      document.querySelectorAll(".nav-menu[open]").forEach((menu) => {
+        menu.open = false;
+      });
+    };
+
+    const handlePointerDown = (event) => {
+      const openMenus = document.querySelectorAll(".nav-menu[open]");
+      const clickedInsideOpenMenu = Array.from(openMenus).some((menu) => menu.contains(event.target));
+
+      if (!clickedInsideOpenMenu) {
+        closeOpenMenus();
+      }
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        closeOpenMenus();
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
   const scanHref = home ? "#scan" : "/#scan";
   const steps = [
     {
