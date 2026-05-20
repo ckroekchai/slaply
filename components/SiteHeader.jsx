@@ -170,7 +170,7 @@ export function SiteHeader({ home = false }) {
               <summary>How it works</summary>
               <div className="how-menu-panel" role="group" aria-label="How Slaply works">
                 <div className="how-menu-copy">
-                  <h2>One image. One scan. One clearer decision.</h2>
+                  <h2>One image. One scan. <span className="nowrap">One clearer decision.</span></h2>
                   <p>
                     Upload your final artwork, preview the key risks, then unlock the full report only when you need
                     more detail.
