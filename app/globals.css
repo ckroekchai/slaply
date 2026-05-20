@@ -536,7 +536,7 @@
       }
 
       .pricing-menu-grid .price {
-        margin-top: 16px;
+        margin-top: 11px;
         font-size: 26px;
       }
 
@@ -547,7 +547,7 @@
 
       .pricing-menu-grid .pricing-list {
         gap: 8px;
-        margin: 14px 0 18px;
+        margin: 9px 0 18px;
       }
 
       .pricing-menu-grid .pricing-list li {
@@ -2204,6 +2204,13 @@
 
         .nav {
           gap: 8px;
+        }
+
+        .nav-links {
+          position: absolute;
+          left: 50%;
+          margin-left: 0;
+          transform: translateX(-50%);
         }
 
         .example-menu-panel,
