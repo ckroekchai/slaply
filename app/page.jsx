@@ -31,10 +31,10 @@ export default async function Home({ searchParams }) {
           <div className="container">
             <div className="cta-panel">
               <div className="cta-copy">
-                <h2>Check your pack before mistakes hit the rack.</h2>
+                <h2>Better artwork in. Better scan out.</h2>
                 <p>
-                  Start with one image and product category. Slaply will show where the packaging may fail before you
-                  spend on production, ads, or marketplace launch.
+                  Use high-quality final artwork, crop out non-artwork or title block areas, and select the right
+                  category before submitting.
                 </p>
               </div>
 
