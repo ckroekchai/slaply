@@ -1,0 +1,17 @@
+case_id: SKINCARE_001
+category: Beauty / Skincare
+language: Thai
+artwork_ref: private://not-committed/SKINCARE_001.png
+expected_focus:
+  - Text Errors
+  - Hierarchy
+  - Readability
+known_issues:
+  - placeholder exact visible typo
+  - placeholder possible watermark
+  - placeholder product variant clarity risk
+must_not_flag:
+  - overall style
+  - premium impression
+  - general layout preference
+notes: Placeholder metadata only. Do not commit the artwork file.

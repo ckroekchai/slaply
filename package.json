@@ -3,6 +3,8 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
+    "generate:ai-prompts": "node scripts/generate-ai-prompts.mjs",
+    "prebuild": "npm run generate:ai-prompts",
     "dev": "next dev",
     "build": "next build",
     "build:cloudflare": "node scripts/build-cloudflare-sanitized.mjs",
