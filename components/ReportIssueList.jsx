@@ -6,7 +6,13 @@ function severityClass(severity) {
   return `severity ${severity?.toLowerCase() || "medium"}`;
 }
 
-export function ReportIssueList({ issues = [], initiallyUnlocked = false, autoRevealSeconds = 0 }) {
+export function ReportIssueList({
+  issues = [],
+  summary = "",
+  language = "english",
+  initiallyUnlocked = false,
+  autoRevealSeconds = 0
+}) {
   const [isUnlocked, setIsUnlocked] = useState(initiallyUnlocked);
 
   useEffect(() => {
@@ -26,6 +32,25 @@ export function ReportIssueList({ issues = [], initiallyUnlocked = false, autoRe
 
     return () => window.clearTimeout(timer);
   }, [initiallyUnlocked, autoRevealSeconds]);
+
+  if (!issues.length) {
+    const isThai = language === "thai";
+    const fallbackSummary = isThai
+      ? "AI scan เสร็จแล้ว และไม่พบ issue ที่ชัดเจนใน artwork นี้"
+      : "AI scan completed and no clear artwork issue was found.";
+
+    return (
+      <div className="issue-list">
+        <div className="issue">
+          <div className="issue-top">
+            <h4>{isThai ? "ไม่พบ issue ที่ชัดเจน" : "No clear issues found"}</h4>
+            <span className="status-pill status-pill-ready">{isThai ? "สแกนเสร็จแล้ว" : "Scan complete"}</span>
+          </div>
+          <p>{summary || fallbackSummary}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={isUnlocked ? "issue-list" : "issue-list issue-list-locked"}>

@@ -12,6 +12,15 @@ export const dynamic = "force-dynamic";
 
 function getPreviewMetrics(preview) {
   const counts = preview?.issue_counts || { text_errors: 0, hierarchy: 0, readability: 0 };
+  const totalIssues = (counts.text_errors || 0) + (counts.hierarchy || 0) + (counts.readability || 0);
+
+  if (preview && totalIssues === 0) {
+    return [
+      { label: "Overall score", value: preview.overall_score ?? "—" },
+      { label: "Readiness", value: preview.readiness_level || "Ready" },
+      { label: "Issues found", value: 0 }
+    ];
+  }
 
   return [
     { label: "Text Errors", value: counts.text_errors || 0 },
@@ -140,6 +149,8 @@ export default async function ReportPage({ params, searchParams }) {
 
                       <ReportIssueList
                         issues={safeScan.preview.issues}
+                        summary={safeScan.preview.summary}
+                        language={safeScan.language}
                         initiallyUnlocked={isPaid}
                         autoRevealSeconds={autoRevealSeconds}
                       />
