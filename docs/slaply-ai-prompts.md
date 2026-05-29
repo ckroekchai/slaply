@@ -84,10 +84,10 @@ Audit scope:
 False-positive control:
 - Before adding any issue, pass all four gates: visible evidence, allowed issue type, practical consequence, and narrow fix.
 - If any gate fails, omit the issue.
-- Prefer fewer high-confidence issues over a long list of weak observations. Returning zero issues is allowed when the artwork has no concrete visible pre-flight risk.
+- Prefer fewer high-confidence issues over a long list of weak observations. Returning zero issues is allowed only after checking for visible text errors, conflicting product facts, watermarks/preview marks, and purchase-critical clarity risks.
 - Do not infer issues from missing ideal content, industry assumptions, expected regulatory information, invisible back-side content, or what might happen in a thumbnail/listing/mobile preview.
 - Do not turn general observations into issues. Each issue must be actionable as one localized correction, verification, asset replacement, or small visibility check.
-- Inspect these important anchors before finalizing: product identity, product type, variant/flavor/shade/formula, size/unit/quantity, price/offer/date/deadline, CTA or scan instruction, QR/barcode area, exact visible selling claims, watermarks/preview marks, and visibly pixelated product or illustration details. Report only anchors that pass all four gates.
+- Inspect these important anchors before finalizing: product identity, product type, variant/flavor/shade/formula, size/weight/unit/quantity, cross-panel consistency of repeated size/weight/unit/quantity values, price/offer/date/deadline, CTA or scan instruction, QR/barcode area, exact visible selling claims, watermarks/preview marks, and visibly pixelated product or illustration details. Report only anchors that pass all four gates.
 
 Allowed issue types:
 - Text Errors
@@ -114,6 +114,7 @@ Category guardrails:
 Dieline and panel context:
 - If the artwork is a dieline, unfolded carton, label layout, or packaging net, do not flag text or logos as upside down, rotated, mirrored, or reversed solely because one unfolded panel appears inverted. Some panels are intentionally rotated so they read correctly after folding or assembly.
 - Only report orientation as an issue when the exact final-facing panel is clearly wrong after considering the fold/assembly context. If uncertain, omit the orientation issue.
+- Even on dielines, compare readable product facts repeated across front, side, back, top, and bottom panels. If two visible values for weight, size, unit, quantity, flavor, variant, price, date, offer, URL, handle, or contact information conflict, create a Text Errors issue and annotate the clearest conflicting value directly.
 - Do not flag text size as an issue by default. Routine small copy, body copy, ingredient lists, directions, manufacturer/distributor information, warnings, legal/support copy, and similar back-panel product information should be omitted when the only concern is that the text is small, dense, or somewhat hard to read.
 - Do not audit routine back-label copy for completeness or general legibility polish. Only report it when there is a clear visible text error, inconsistent number/unit, QR/barcode problem, watermark/preview mark, or physically unreadable purchase-critical information.
 - The only text-size/prominence exception is a Hierarchy issue for an exact visible benefit claim or likely selling keyword that should help sell the product but is not prominent enough within its own local panel, frame, label area, or badge. Compare only against that local area, not the full unfolded artwork.
@@ -149,6 +150,7 @@ Issue taxonomy and counts:
 
 Text Errors rules:
 - Only flag actual visible text errors or inconsistencies. Do not rewrite copy for style, persuasion, tone, or conversion.
+- Cross-panel conflicts in readable product facts are Text Errors even when one value appears on a small, vertical, side, top, bottom, or back-panel area. Do not dismiss readable weights, units, quantities, dates, prices, URLs, handles, or contact details as routine small copy when they contradict another visible value.
 - Do not flag stylized capitalization, deliberate line breaks, short keyword fragments, brand spellings, playful product names, bilingual label choices, or abbreviations unless there is clear visible evidence that they are wrong or internally inconsistent.
 - Do not flag a typo from uncertain OCR. If the exact word cannot be read confidently, treat it as Readability only when the text is physically unreadable and purchase-critical; otherwise omit it.
 - For Text Errors, the recommendation must start by repeating the exact wrong word, misspelling, spacing issue, sentence problem, inconsistent number, wrong unit, or placeholder visible in the artwork, then provide exactly one corrected wording option or checking instruction.
