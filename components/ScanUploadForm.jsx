@@ -74,6 +74,7 @@ export function ScanUploadForm({ error = "" }) {
   const [crop, setCrop] = useState(fullCrop);
   const [dragState, setDragState] = useState(null);
   const [cropApplied, setCropApplied] = useState(false);
+  const [isCropModalOpen, setIsCropModalOpen] = useState(false);
   const [cropMessage, setCropMessage] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -86,6 +87,28 @@ export function ScanUploadForm({ error = "" }) {
       }
     };
   }, [previewUrl]);
+
+  useEffect(() => {
+    if (!isCropModalOpen) {
+      return undefined;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setIsCropModalOpen(false);
+      }
+    }
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isCropModalOpen]);
 
   useEffect(() => {
     if (!dragState) {
@@ -208,6 +231,7 @@ export function ScanUploadForm({ error = "" }) {
       assignFileToInput(originalFile);
       setFileName(originalFile.name);
       setCropApplied(false);
+      setIsCropModalOpen(false);
       setCropMessage("Full image selected. You can still drag the crop frame to trim the artwork.");
       refreshValidation(fileInputRef.current?.form);
       return true;
@@ -245,6 +269,7 @@ export function ScanUploadForm({ error = "" }) {
 
       setFileName(croppedFile.name);
       setCropApplied(true);
+      setIsCropModalOpen(false);
       setCropMessage("Crop applied. This cropped artwork will be scanned.");
       refreshValidation(fileInputRef.current?.form);
       return true;
@@ -299,9 +324,11 @@ export function ScanUploadForm({ error = "" }) {
     if (file && acceptedImageTypes.includes(file.type)) {
       setOriginalFile(file);
       setPreviewUrl(URL.createObjectURL(file));
+      setIsCropModalOpen(true);
       setCropMessage("Drag the crop frame to keep only the artwork area, then apply crop.");
     } else {
       setOriginalFile(null);
+      setIsCropModalOpen(false);
       setCropMessage("");
     }
 
@@ -336,6 +363,11 @@ export function ScanUploadForm({ error = "" }) {
     refreshValidation(fileInputRef.current?.form);
   }
 
+  function handleUseFullImage() {
+    handleResetCrop();
+    setIsCropModalOpen(false);
+  }
+
   return (
     <form
       className="scan-form"
@@ -368,63 +400,11 @@ export function ScanUploadForm({ error = "" }) {
       </label>
 
       {previewUrl ? (
-        <div className="crop-tool">
-          <div className="crop-tool-head">
-            <div>
-              <strong>Crop artwork</strong>
-              <span>Remove title blocks, notes, mockup background, or non-artwork areas.</span>
-            </div>
-            <span className={`crop-status ${cropApplied ? "is-applied" : ""}`}>
-              {cropApplied ? "Applied" : "Ready"}
-            </span>
-          </div>
-
-          <div className="crop-stage" ref={cropStageRef}>
-            <img src={previewUrl} alt="Selected artwork preview" className="crop-image" draggable="false" />
-            <div
-              className="crop-selection"
-              style={{
-                left: `${crop.x}%`,
-                top: `${crop.y}%`,
-                width: `${crop.width}%`,
-                height: `${crop.height}%`
-              }}
-              onPointerDown={(event) => handleCropPointerDown(event, "move")}
-              role="presentation"
-            >
-              <span
-                className="crop-handle top-left"
-                onPointerDown={(event) => handleCropPointerDown(event, "top-left")}
-                aria-hidden="true"
-              />
-              <span
-                className="crop-handle top-right"
-                onPointerDown={(event) => handleCropPointerDown(event, "top-right")}
-                aria-hidden="true"
-              />
-              <span
-                className="crop-handle bottom-left"
-                onPointerDown={(event) => handleCropPointerDown(event, "bottom-left")}
-                aria-hidden="true"
-              />
-              <span
-                className="crop-handle bottom-right"
-                onPointerDown={(event) => handleCropPointerDown(event, "bottom-right")}
-                aria-hidden="true"
-              />
-            </div>
-          </div>
-
-          <div className="crop-tool-actions">
-            <button type="button" className="crop-action primary" onClick={applyCrop}>
-              Apply crop
-            </button>
-            <button type="button" className="crop-action" onClick={handleResetCrop}>
-              Reset crop
-            </button>
-          </div>
-
-          {cropMessage ? <p className="crop-message">{cropMessage}</p> : null}
+        <div className="crop-summary">
+          <span>{cropApplied ? "Crop applied" : "Ready to crop"}</span>
+          <button type="button" className="crop-edit-button" onClick={() => setIsCropModalOpen(true)}>
+            Edit crop
+          </button>
         </div>
       ) : null}
 
@@ -483,6 +463,80 @@ export function ScanUploadForm({ error = "" }) {
           )}
         </button>
       </div>
+
+      {previewUrl && isCropModalOpen ? (
+        <div className="crop-modal-backdrop" onPointerDown={() => setIsCropModalOpen(false)}>
+          <div
+            className="crop-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="crop-modal-title"
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <div className="crop-modal-head">
+              <div>
+                <h3 id="crop-modal-title">Crop artwork</h3>
+                <p>Remove title blocks, notes, mockup background, or non-artwork areas.</p>
+              </div>
+              <button type="button" className="crop-modal-close" onClick={() => setIsCropModalOpen(false)}>
+                Close
+              </button>
+            </div>
+
+            <div className="crop-tool">
+              <div className="crop-stage" ref={cropStageRef}>
+                <img src={previewUrl} alt="Selected artwork preview" className="crop-image" draggable="false" />
+                <div
+                  className="crop-selection"
+                  style={{
+                    left: `${crop.x}%`,
+                    top: `${crop.y}%`,
+                    width: `${crop.width}%`,
+                    height: `${crop.height}%`
+                  }}
+                  onPointerDown={(event) => handleCropPointerDown(event, "move")}
+                  role="presentation"
+                >
+                  <span
+                    className="crop-handle top-left"
+                    onPointerDown={(event) => handleCropPointerDown(event, "top-left")}
+                    aria-hidden="true"
+                  />
+                  <span
+                    className="crop-handle top-right"
+                    onPointerDown={(event) => handleCropPointerDown(event, "top-right")}
+                    aria-hidden="true"
+                  />
+                  <span
+                    className="crop-handle bottom-left"
+                    onPointerDown={(event) => handleCropPointerDown(event, "bottom-left")}
+                    aria-hidden="true"
+                  />
+                  <span
+                    className="crop-handle bottom-right"
+                    onPointerDown={(event) => handleCropPointerDown(event, "bottom-right")}
+                    aria-hidden="true"
+                  />
+                </div>
+              </div>
+
+              <div className="crop-tool-actions">
+                <button type="button" className="crop-action primary" onClick={applyCrop}>
+                  Apply crop
+                </button>
+                <button type="button" className="crop-action" onClick={handleResetCrop}>
+                  Reset crop
+                </button>
+                <button type="button" className="crop-action" onClick={handleUseFullImage}>
+                  Use full image
+                </button>
+              </div>
+
+              {cropMessage ? <p className="crop-message">{cropMessage}</p> : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </form>
   );
 }
