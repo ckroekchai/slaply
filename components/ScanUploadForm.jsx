@@ -486,6 +486,31 @@ export function ScanUploadForm({ error = "" }) {
             <div className="crop-tool">
               <div className="crop-stage" ref={cropStageRef}>
                 <img src={previewUrl} alt="Selected artwork preview" className="crop-image" draggable="false" />
+                <span className="crop-shade crop-shade-top" style={{ height: `${crop.y}%` }} />
+                <span
+                  className="crop-shade crop-shade-left"
+                  style={{
+                    top: `${crop.y}%`,
+                    width: `${crop.x}%`,
+                    height: `${crop.height}%`
+                  }}
+                />
+                <span
+                  className="crop-shade crop-shade-right"
+                  style={{
+                    top: `${crop.y}%`,
+                    left: `${crop.x + crop.width}%`,
+                    width: `${100 - crop.x - crop.width}%`,
+                    height: `${crop.height}%`
+                  }}
+                />
+                <span
+                  className="crop-shade crop-shade-bottom"
+                  style={{
+                    top: `${crop.y + crop.height}%`,
+                    height: `${100 - crop.y - crop.height}%`
+                  }}
+                />
                 <div
                   className="crop-selection"
                   style={{

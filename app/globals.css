@@ -1505,7 +1505,7 @@
 
       .crop-stage {
         position: relative;
-        overflow: hidden;
+        overflow: visible;
         border-radius: 18px;
         background: rgba(255, 255, 255, 0.54);
         touch-action: none;
@@ -1519,50 +1519,72 @@
         pointer-events: none;
       }
 
+      .crop-shade {
+        position: absolute;
+        background: rgba(5, 6, 10, 0.34);
+        pointer-events: none;
+      }
+
+      .crop-shade-top,
+      .crop-shade-bottom {
+        left: 0;
+        width: 100%;
+      }
+
+      .crop-shade-top {
+        top: 0;
+        border-radius: 18px 18px 0 0;
+      }
+
+      .crop-shade-left,
+      .crop-shade-right {
+        left: 0;
+      }
+
+      .crop-shade-bottom {
+        border-radius: 0 0 18px 18px;
+      }
+
       .crop-selection {
         position: absolute;
         border: 2px solid rgba(0, 122, 255, 0.96);
         border-radius: 10px;
-        box-shadow:
-          0 0 0 9999px rgba(5, 6, 10, 0.34),
-          inset 0 0 0 1px rgba(255, 255, 255, 0.72);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.72);
         cursor: move;
         touch-action: none;
       }
 
       .crop-handle {
         position: absolute;
-        width: 22px;
-        height: 22px;
+        width: 16px;
+        height: 16px;
         border-radius: 999px;
-        border: 3px solid #ffffff;
-        background:
-          radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.8), transparent 22%),
-          var(--blue);
-        box-shadow: 0 8px 18px rgba(0, 122, 255, 0.32);
+        border: 2px solid #ffffff;
+        background: var(--blue);
+        box-shadow: 0 6px 14px rgba(0, 122, 255, 0.26);
       }
 
       .crop-handle.top-left {
-        top: 8px;
-        left: 8px;
+        top: -8px;
+        left: -8px;
         cursor: nwse-resize;
       }
 
       .crop-handle.top-right {
-        top: 8px;
-        right: 8px;
+        top: -8px;
+        right: -8px;
         cursor: nesw-resize;
       }
 
       .crop-handle.bottom-left {
-        bottom: 8px;
-        left: 8px;
+        bottom: -8px;
+        left: -8px;
         cursor: nesw-resize;
       }
 
       .crop-handle.bottom-right {
-        right: 8px;
-        bottom: 8px;
+        right: -8px;
+        bottom: -8px;
         cursor: nwse-resize;
       }
 
