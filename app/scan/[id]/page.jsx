@@ -1,11 +1,8 @@
-import { PaymentCountdown } from "../../../components/PaymentCountdown";
 import { ReportIssueList } from "../../../components/ReportIssueList";
 import { RunAiScanForm } from "../../../components/RunAiScanForm";
 import { SiteHeader } from "../../../components/SiteHeader";
 import { UploadedArtwork } from "../../../components/UploadedArtwork";
-import { getSafePayment, getPaymentById } from "../../../lib/payments";
 import { getSafeScan, getScanById } from "../../../lib/scans";
-import { getPromptPayDisplayName, getReportPriceThb } from "../../../lib/promptpay";
 import { formatProductCategory } from "../../../lib/scan-form-options";
 
 export const dynamic = "force-dynamic";
@@ -29,61 +26,13 @@ function getPreviewMetrics(preview) {
   ];
 }
 
-function PaymentBlock({ payment, scanId, reportPrice, autoRevealSeconds = 0 }) {
-  const promptPayQrUrl = "/slaply-promptpay-qr.jpg";
-  const isUnlocked = payment?.payment_status === "paid";
-  const shouldShowConfirmationCountdown = Boolean(payment && !isUnlocked && autoRevealSeconds);
-
-  return (
-    <div className="unlock-card" id="payment">
-      <div>
-        <span className="eyebrow">Full report</span>
-        <h3>Unlock the complete audit</h3>
-        <p>Move from preview to the full list of issues, detailed findings, and recommended actions.</p>
-      </div>
-
-      {payment ? (
-        <div className="payment-panel">
-          <img className="payment-qr" src={promptPayQrUrl} alt="PromptPay QR code" />
-          <div className="payment-meta">
-            <strong>PromptPay QR</strong>
-            <span>
-              {isUnlocked ? "THB" : "Pay THB"} {payment.amount.toLocaleString("en-US")} to {getPromptPayDisplayName()}
-            </span>
-            <span>Reference: {payment.id.slice(0, 8).toUpperCase()}</span>
-            <small>
-              {isUnlocked
-                ? "PromptPay QR is ready. The full report is now unlocked."
-                : "Scan this PromptPay QR. Slaply will open the hidden guidance after payment confirmation."}
-            </small>
-            <PaymentCountdown enabled={shouldShowConfirmationCountdown} seconds={autoRevealSeconds} />
-          </div>
-        </div>
-      ) : (
-        <form action="/api/create-payment" method="post" className="unlock-form">
-          <input type="hidden" name="scan_id" value={scanId} />
-          <button type="submit" className="button button-primary">
-            Generate PromptPay QR · THB {reportPrice.toLocaleString("en-US")}
-          </button>
-        </form>
-      )}
-    </div>
-  );
-}
-
 export default async function ReportPage({ params, searchParams }) {
   const { id } = await params;
   const query = await searchParams;
   const pageError = typeof query?.error === "string" ? query.error : "";
-  const paymentId = typeof query?.payment_id === "string" ? query.payment_id : "";
   const { scan, imageUrl } = await getScanById(id);
   const safeScan = getSafeScan(scan);
-  const { payment } = await getPaymentById(paymentId, id);
-  const safePayment = getSafePayment(payment);
-  const reportPrice = getReportPriceThb();
   const hasPreview = Boolean(safeScan?.preview);
-  const isPaid = safeScan?.payment_status === "paid";
-  const autoRevealSeconds = safePayment && !isPaid ? 10 : 0;
   const metrics = getPreviewMetrics(safeScan?.preview);
 
   if (!scan) {
@@ -133,7 +82,7 @@ export default async function ReportPage({ params, searchParams }) {
                 <div className="report-zone">
                   <div className="report-head">
                     <h3>{hasPreview ? "Audit summary" : "Artwork uploaded"}</h3>
-                    {hasPreview ? <span className="status-pill">{isPaid ? "Paid" : "Scan complete"}</span> : null}
+                    {hasPreview ? <span className="status-pill">Scan complete</span> : null}
                   </div>
 
                   {hasPreview ? (
@@ -151,22 +100,8 @@ export default async function ReportPage({ params, searchParams }) {
                         issues={safeScan.preview.issues}
                         summary={safeScan.preview.summary}
                         language={safeScan.language}
-                        initiallyUnlocked={isPaid}
-                        autoRevealSeconds={autoRevealSeconds}
+                        initiallyUnlocked
                       />
-
-                      {isPaid ? (
-                        safePayment ? (
-                          <PaymentBlock payment={safePayment} scanId={scan.id} reportPrice={reportPrice} />
-                        ) : null
-                      ) : (
-                        <PaymentBlock
-                          payment={safePayment}
-                          scanId={scan.id}
-                          reportPrice={reportPrice}
-                          autoRevealSeconds={autoRevealSeconds}
-                        />
-                      )}
                     </>
                   ) : (
                     <>
