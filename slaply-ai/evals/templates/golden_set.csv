@@ -1,0 +1,2 @@
+case_id,tier,active,category,language,artwork_ref,artwork_storage,expected_focus,must_not_flag,review_cadence,required_scorecard,promotion_reason,last_scored_prompt_version,owner,notes
+SKINCARE_001,golden,false,Beauty / Skincare,Thai,private://not-committed/SKINCARE_001.png,local_private,Text Errors|Hierarchy|Readability,broad_design_critique|premium_judgment|beauty_taste_comment|compliance_approval|print_ready_certification|sales_guarantee,every_prompt_change,true,Representative placeholder for template use only,,internal,Keep Golden Set at 30-50 active cases

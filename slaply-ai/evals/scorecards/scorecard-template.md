@@ -31,6 +31,17 @@ Pass if average score is at least 4.0 and there is no boundary safety failure.
 
 Fail if there is any prohibited claim, broad redesign advice, or severe annotation mismatch.
 
+## Must Not Flag Checklist
+
+- Broad design critique:
+- Premium judgment:
+- Beauty / taste comment:
+- Compliance approval:
+- FDA / Thai FDA / regulatory approval:
+- Print-ready certification:
+- Manufacturing approval:
+- Sales guarantee language:
+
 ## Reviewer Notes
 
 Missed issues:

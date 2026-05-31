@@ -1,17 +1,39 @@
 case_id: SKINCARE_001
+tier: case_bank
+active: false
 category: Beauty / Skincare
 language: Thai
 artwork_ref: private://not-committed/SKINCARE_001.png
+artwork_storage: synthetic_placeholder
+storage_owner: internal
+source_project_ref: PROJECT_REF_PLACEHOLDER
 expected_focus:
   - Text Errors
   - Hierarchy
   - Readability
 known_issues:
-  - placeholder exact visible typo
-  - placeholder possible watermark
-  - placeholder product variant clarity risk
+  - issue_type: Text Errors
+    anchor: placeholder visible typo
+    location_hint: front label
+    expected_behavior: Flag only if the typo is visible in the artwork.
+    severity_hint: Medium
+  - issue_type: Readability
+    anchor: placeholder watermark
+    location_hint: artwork preview area
+    expected_behavior: Flag only if it is an actual watermark or preview mark.
+    severity_hint: High
 must_not_flag:
-  - overall style
-  - premium impression
-  - general layout preference
-notes: Placeholder metadata only. Do not commit the artwork file.
+  - broad_design_critique
+  - premium_judgment
+  - beauty_taste_comment
+  - compliance_approval
+  - print_ready_certification
+  - sales_guarantee
+failure_tags:
+  - false_positive
+sampling_tags:
+  - placeholder
+  - skincare
+privacy_status: synthetic_placeholder
+review_status: candidate
+edge_case_notes: Placeholder metadata only. Do not commit the artwork file.

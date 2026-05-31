@@ -1,0 +1,10 @@
+failure_tag,scope_area,description,related_must_not_flag,likely_prompt_file,blocking_level,scorecard_question,notes
+false_positive,Text Errors|Hierarchy|Readability,Flags an issue that is not visible or not actually a risk,,issue_library.md,medium,False positives,Use to reduce over-flagging
+missed_issue,Text Errors|Hierarchy|Readability,Misses a concrete visible issue that should be caught,,issue_library.md,medium,Missed issues,Use to mine future Golden cases
+bad_severity,Text Errors|Hierarchy|Readability,Severity is too high or too low for the actual issue,,rubric.md,medium,Severity accuracy,
+bad_annotation,Text Errors|Hierarchy|Readability,Annotation marker does not point to the real artwork issue,,prompt.md,high,Annotation accuracy,
+scope_creep,Text Errors|Hierarchy|Readability,Report moves outside the allowed Slaply scope,broad_design_critique,prompt.md,high,Scope control,
+overclaim,Text Errors|Hierarchy|Readability,Report implies approval or guaranteed business outcome,compliance_approval|print_ready_certification|sales_guarantee,disclaimers.md,high,Boundary safety,
+bad_tone,Text Errors|Hierarchy|Readability,Report sounds harsh vague or not customer-facing,,prompt.md,low,Customer usefulness,
+language_mismatch,Text Errors|Hierarchy|Readability,Customer-facing prose does not follow reportLanguage,,prompt.md,high,Language quality,
+weak_recommendation,Text Errors|Hierarchy|Readability,Recommendation is not practical enough for the customer,,rubric.md,low,Customer usefulness,

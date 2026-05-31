@@ -1,0 +1,2 @@
+prompt_version,date,status,changed_files,change_summary,eval_scope,golden_pass_rate,regression_pass_rate,known_risks,deploy_decision,reviewer,notes
+slaply-preflight-v0.1,2026-05-30,accepted,slaply-ai/prompts/*,Initial modular prompt baseline,Golden Set + Regression Set,,,,hold,internal,Template row
