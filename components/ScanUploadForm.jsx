@@ -171,7 +171,7 @@ export function ScanUploadForm({ error = "" }) {
 
       setCrop(nextCrop);
       setCropApplied(false);
-      setCropMessage("Adjust the frame, then apply crop before submitting.");
+      setCropMessage("Adjust the frame, then use crop before submitting.");
     }
 
     function handlePointerUp() {
@@ -325,7 +325,7 @@ export function ScanUploadForm({ error = "" }) {
       setOriginalFile(file);
       setPreviewUrl(URL.createObjectURL(file));
       setIsCropModalOpen(true);
-      setCropMessage("Drag the crop frame to keep only the artwork area, then apply crop.");
+      setCropMessage("Drag the crop frame to keep only the artwork area, then use crop.");
     } else {
       setOriginalFile(null);
       setIsCropModalOpen(false);
@@ -349,23 +349,6 @@ export function ScanUploadForm({ error = "" }) {
     event.preventDefault();
     event.stopPropagation();
     setDragState({ mode, startPoint: point, startCrop: crop });
-  }
-
-  function handleResetCrop() {
-    if (originalFile) {
-      assignFileToInput(originalFile);
-      setFileName(originalFile.name);
-    }
-
-    setCrop(fullCrop);
-    setCropApplied(false);
-    setCropMessage("Full image selected. You can still drag the crop frame to trim the artwork.");
-    refreshValidation(fileInputRef.current?.form);
-  }
-
-  function handleUseFullImage() {
-    handleResetCrop();
-    setIsCropModalOpen(false);
   }
 
   return (
@@ -478,8 +461,8 @@ export function ScanUploadForm({ error = "" }) {
                 <h3 id="crop-modal-title">Crop artwork</h3>
                 <p>Remove title blocks, notes, mockup background, or non-artwork areas.</p>
               </div>
-              <button type="button" className="crop-modal-close" onClick={() => setIsCropModalOpen(false)}>
-                Close
+              <button type="button" className="crop-modal-apply" onClick={applyCrop}>
+                Use Crop
               </button>
             </div>
 
@@ -543,18 +526,6 @@ export function ScanUploadForm({ error = "" }) {
                     aria-hidden="true"
                   />
                 </div>
-              </div>
-
-              <div className="crop-tool-actions">
-                <button type="button" className="crop-action primary" onClick={applyCrop}>
-                  Apply crop
-                </button>
-                <button type="button" className="crop-action" onClick={handleResetCrop}>
-                  Reset crop
-                </button>
-                <button type="button" className="crop-action" onClick={handleUseFullImage}>
-                  Use full image
-                </button>
               </div>
 
               {cropMessage ? <p className="crop-message">{cropMessage}</p> : null}
