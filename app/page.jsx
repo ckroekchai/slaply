@@ -14,19 +14,6 @@ export default async function Home({ searchParams }) {
       <SiteHeader home />
 
       <main id="top">
-        <section className="hero">
-          <div className="container">
-            <div className="hero-content">
-              <div className="eyebrow">Instant AI packaging audit</div>
-              <h1>Catch the mistakes<br /><span className="liquid-text">Before they cost you.</span></h1>
-              <p className="hero-copy">
-                Upload your final artwork and get an AI visual audit that spots text errors, missing info, readability
-                risk, clarity, and hierarchy before you print, produce, list, or launch.
-              </p>
-            </div>
-          </div>
-        </section>
-
         <section id="scan" className="cta">
           <div className="container">
             <div className="cta-panel">

@@ -255,10 +255,6 @@
         position: relative;
       }
 
-      .nav-menu-example {
-        position: static;
-      }
-
       .nav-menu-pricing {
         position: static;
       }
@@ -1312,7 +1308,7 @@
         gap: 24px;
         align-items: center;
         position: relative;
-        top: -25px;
+        top: 0;
         padding: 18px;
         border-radius: 46px;
         border: 1px solid rgba(255, 255, 255, 0.7);
