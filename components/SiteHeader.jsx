@@ -70,7 +70,7 @@ export function SiteHeader({ home = false }) {
     {
       title: "Full Report",
       description: "For clients who need a clearer decision before production or launch.",
-      price: "THB 399",
+      price: "THB 99",
       note: "Per report",
       bullets: ["Annotated issue map", "Risk and clarity scoring", "Prioritized action list"],
       action: "Unlock report",

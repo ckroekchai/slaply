@@ -52,6 +52,13 @@ export default async function ReportPage({ params, searchParams }) {
 
   const categoryLabel = formatProductCategory(scan.product_category);
   const languageLabel = scan.language === "thai" ? "Thai report" : "English report";
+  const reportContext = (
+    <>
+      {categoryLabel}
+      {"\u00a0\u00a0·\u00a0\u00a0"}
+      {languageLabel}
+    </>
+  );
 
   return (
     <>
@@ -61,17 +68,6 @@ export default async function ReportPage({ params, searchParams }) {
       <SiteHeader />
       <main className="page-shell report-shell">
         <section className="container report-page">
-          <div className="report-page-head">
-            <div>
-              <h2>{hasPreview ? "Scan report" : "Scan queued"}</h2>
-              <p>
-                {categoryLabel}
-                {"\u00a0\u00a0·\u00a0\u00a0"}
-                {languageLabel}
-              </p>
-            </div>
-          </div>
-
           <div className="glass-device report-device">
             <div className="window">
               <div className="window-bar" aria-hidden="true" />
@@ -81,7 +77,10 @@ export default async function ReportPage({ params, searchParams }) {
 
                 <div className="report-zone">
                   <div className="report-head">
-                    <h3>{hasPreview ? "Audit summary" : "Artwork uploaded"}</h3>
+                    <div className="report-title-stack">
+                      <h3>{hasPreview ? "Scan report" : "Artwork uploaded"}</h3>
+                      <p className="report-context">{reportContext}</p>
+                    </div>
                     {hasPreview ? <span className="status-pill">Scan complete</span> : null}
                   </div>
 
