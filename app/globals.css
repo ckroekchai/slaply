@@ -1660,7 +1660,8 @@
       }
 
       .report-shell .report-page {
-        margin-top: -68px;
+        margin-top: 0;
+        padding: 25px 0 62px;
       }
 
       .report-page {
@@ -2248,7 +2249,8 @@
           padding: 66px 0;
         }
 
-        .cta {
+        .cta,
+        .report-shell .report-page {
           padding: 13px 0 16px;
         }
 
