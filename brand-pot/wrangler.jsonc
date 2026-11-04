@@ -1,0 +1,87 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "account_id": "bffc10ee3c60e42c6260c87ae69f710a",
+  "name": "slaply-cloudflare-preview",
+  "main": "worker/index.mjs",
+  "compatibility_date": "2026-11-04",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workers_dev": true,
+  "preview_urls": false,
+  "keep_vars": true,
+  "assets": {
+    "directory": "dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
+  },
+  "vars": {
+    "OPENAI_BRAND_MODEL": "gpt-5.4-mini",
+    "OPENAI_IMAGE_MODEL": "gpt-image-2",
+    "DAILY_SESSION_LIMIT": "5",
+    "DAILY_IP_LIMIT": "10",
+    "DAILY_GLOBAL_LIMIT": "40"
+  },
+  "d1_databases": [
+    {
+      "binding": "SLAPLY_DB",
+      "database_name": "slaply-preview-db",
+      "database_id": "b2f5fa0a-6c21-4782-908a-add982b830ef",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "SLAPLY_UPLOADS",
+      "bucket_name": "slaply-preview-uploads"
+    }
+  ],
+  "workflows": [
+    {
+      "binding": "BRAND_GENERATION",
+      "name": "slaply-brand-preview",
+      "class_name": "BrandGenerationWorkflow"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "env": {
+    "production": {
+      "name": "slaply-cloudflare-production",
+      "routes": [
+        "www.slaply.co/*",
+        "slaply.co/*"
+      ],
+      "vars": {
+        "OPENAI_BRAND_MODEL": "gpt-5.4-mini",
+        "OPENAI_IMAGE_MODEL": "gpt-image-2",
+        "DAILY_SESSION_LIMIT": "5",
+        "DAILY_IP_LIMIT": "10",
+        "DAILY_GLOBAL_LIMIT": "40"
+      },
+      "d1_databases": [
+        {
+          "binding": "SLAPLY_DB",
+          "database_name": "slaply-production-db",
+          "database_id": "3c347d04-e5bd-4b83-80d9-4878bb5553e4",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "SLAPLY_UPLOADS",
+          "bucket_name": "slaply-production-uploads"
+        }
+      ],
+      "workflows": [
+        {
+          "binding": "BRAND_GENERATION",
+          "name": "slaply-brand-production",
+          "class_name": "BrandGenerationWorkflow"
+        }
+      ]
+    }
+  }
+}

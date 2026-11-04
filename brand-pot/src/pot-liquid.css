@@ -1,0 +1,74 @@
+.pot-assembly > .pot-liquid {
+  position: absolute;
+  z-index: 3;
+  left: 21%;
+  top: 24%;
+  width: 57%;
+  height: 19.5%;
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  clip-path: ellipse(50% 50% at 50% 50%);
+  overflow: hidden;
+  background: #d8d6f6;
+  color: #29294d;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  transform: none;
+  transition: filter .18s ease;
+  isolation: isolate;
+}
+
+.pot-assembly > .pot-liquid:active { cursor: grabbing; transform: none; }
+.pot-assembly > .pot-liquid:hover { filter: saturate(1.12) brightness(1.045); }
+.pot-assembly > .pot-liquid:focus-visible {
+  outline: none;
+}
+.pot-assembly > .pot-liquid::after {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  inset: 1px;
+  border: 2px solid #4f469e;
+  box-shadow: inset 0 0 0 2px #fff5c9;
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+}
+.pot-assembly > .pot-liquid:focus-visible::after { opacity: 1; }
+.pot-liquid > canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+  border-radius: inherit;
+}
+.pot-liquid__still-label {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: #f6f7ffdc;
+  color: #37325c;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.pot-liquid[data-reduced-motion='true'] { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .pot-assembly > .pot-liquid { transition: none; }
+}

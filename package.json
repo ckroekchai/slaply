@@ -1,31 +1,19 @@
 {
-  "name": "slaply-phase1",
+  "name": "slaply",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "scripts": {
-    "generate:ai-prompts": "node scripts/generate-ai-prompts.mjs",
-    "prebuild": "npm run generate:ai-prompts",
-    "dev": "next dev",
-    "build": "next build",
-    "build:cloudflare": "node scripts/build-cloudflare-sanitized.mjs",
-    "build:cloudflare:direct": "opennextjs-cloudflare build",
-    "preview:cloudflare": "npm run build:cloudflare && opennextjs-cloudflare preview",
-    "deploy:cloudflare": "npm run build:cloudflare && opennextjs-cloudflare deploy --env=\"\"",
-    "deploy:cloudflare:production": "npm run build:cloudflare && opennextjs-cloudflare deploy --env production",
-    "start": "next start"
+    "setup": "npm --prefix brand-pot ci",
+    "dev": "npm --prefix brand-pot run dev",
+    "build": "npm --prefix brand-pot run build",
+    "test": "npm --prefix brand-pot test",
+    "deploy:cloudflare": "npm --prefix brand-pot run deploy:preview",
+    "deploy:cloudflare:production": "npm --prefix brand-pot run deploy:production",
+    "preview:cloudflare": "npm --prefix brand-pot run preview:worker"
   },
-  "dependencies": {
-    "next": "latest",
-    "openai": "latest",
-    "react": "latest",
-    "react-dom": "latest",
-    "zod": "latest"
-  },
-  "devDependencies": {
-    "@opennextjs/cloudflare": "^1.19.8",
-    "wrangler": "^4.90.0"
-  },
+  "dependencies": {},
+  "devDependencies": {},
   "engines": {
-    "node": ">=20"
+    "node": ">=22.13.0"
   }
 }
