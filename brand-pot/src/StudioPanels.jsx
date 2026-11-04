@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, BookmarkSimple, DownloadSimple, FileCode, FileText, Flask, Image, Sparkle, X } from '@phosphor-icons/react';
+import { ArrowRight, BookmarkSimple, DownloadSimple, FileCode, FileText, Flask, Image, Sparkle, Trash, ArrowCounterClockwise, Check, X } from '@phosphor-icons/react';
 import './studio-panels.css';
 import { asset } from './assets.js';
 
-const TITLES = { system: 'ปรุงแบรนด์ด้วย AI', export: 'พร้อมนำไปใช้', recipes: 'สูตรที่เป็นคุณ' };
+const TITLES = { system: 'ปรุงแบรนด์ด้วย AI', export: 'เช็คบิล', recipes: 'สูตรที่เป็นคุณ' };
 const KICKERS = { system: 'SLAPLY AI BETA', export: 'YOUR BRANDING GUIDELINE', recipes: 'YOUR RECIPE BOOK' };
-export default function StudioPanels({ panel, onClose, session, recipe = {}, onExport, history = [], onRestore, onSave, recipes = [], onLoadRecipe }) {
+export default function StudioPanels({ panel, onClose, session, recipe = {}, onExport, history = [], onRestore, onSave, recipes = [], onLoadRecipe, isSaved = false, saving = false, trashedRecipes = [], onLoadTrash, onTrashRecipe, onRestoreTrashedRecipe }) {
   const dialogRef = useRef(null), closeRef = useRef(onClose), operation = useRef(false), generation = useRef(0);
   const [feedback, setFeedback] = useState(''), [working, setWorking] = useState(null);
+  const [recipeView, setRecipeView] = useState('saved'), [lastTrashed, setLastTrashed] = useState(null);
   closeRef.current = onClose;
   useEffect(() => {
-    generation.current += 1; operation.current = false; setFeedback(''); setWorking(null);
+    generation.current += 1; operation.current = false; setFeedback(''); setWorking(null); setRecipeView('saved'); setLastTrashed(null);
     if (!panel) return;
     const focus = document.activeElement, overflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -28,19 +29,20 @@ export default function StudioPanels({ panel, onClose, session, recipe = {}, onE
     return () => { clearTimeout(timer); document.body.style.overflow = overflow; document.removeEventListener('keydown', keydown); if (focus instanceof HTMLElement && document.contains(focus)) focus.focus(); };
   }, [panel]);
   if (!panel) return null;
-  const run = async (kind, action, success) => {
+  const run = async (kind, action, success, onSuccess) => {
     if (operation.current) return;
     operation.current = true; const ownGeneration = generation.current; setWorking(kind); setFeedback('');
-    try { await action(); if (ownGeneration === generation.current) setFeedback(success); }
+    try { const value = await action(); if (ownGeneration === generation.current) { setFeedback(success); onSuccess?.(value); } }
     catch (error) { if (ownGeneration === generation.current) setFeedback(error.message || 'ทำรายการไม่สำเร็จ กรุณาลองใหม่'); }
     finally { if (ownGeneration === generation.current) { operation.current = false; setWorking(null); } }
   };
   const name = recipe.name || 'แบรนด์ของคุณ';
+  const shownRecipes = recipeView === 'trash' ? trashedRecipes : recipes;
   const remaining = session ? Math.min(session.remaining, session.globalRemaining) : '…';
   return <div className="sp-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
     <section className={`sp-dialog sp-dialog--${panel}`} role="dialog" aria-modal="true" aria-labelledby="sp-dialog-title" ref={dialogRef} tabIndex={-1}>
       <button className="sp-close" aria-label="ปิดหน้าต่าง" onClick={onClose} data-panel-close><X size={22}/></button>
-      <header className="sp-header"><span className="sp-kicker"><Sparkle size={14} weight="fill"/> {KICKERS[panel]}</span><h2 id="sp-dialog-title">{TITLES[panel]}</h2><p>{panel === 'export' ? `ดาวน์โหลดสูตรและภาพของ ${name}` : panel === 'recipes' ? 'เก็บทิศทางที่ชอบ แล้วกลับมาปรุงต่อ' : 'จากวัตถุดิบของคุณ สู่คอนเซปต์และภาพแบรนด์ใหม่'}</p></header>
+      {panel === 'export' ? <header className="sp-bill-header"><div className="sp-bill-wordmark">Slaply<Sparkle size={24} weight="fill"/></div><span className="sp-bill-kicker">THE BRAND POT</span><div className="sp-bill-heading"><h2 id="sp-dialog-title">เช็คบิล</h2><span>AI BETA · ฟรี</span></div><p>ปรุงเสร็จแล้ว พร้อมเสิร์ฟ</p></header> : <header className="sp-header"><span className="sp-kicker"><Sparkle size={14} weight="fill"/> {KICKERS[panel]}</span><h2 id="sp-dialog-title">{TITLES[panel]}</h2><p>{panel === 'recipes' ? 'เก็บทิศทางที่ชอบ แล้วกลับมาปรุงต่อ' : 'จากวัตถุดิบของคุณ สู่คอนเซปต์และภาพแบรนด์ใหม่'}</p></header>}
       {panel === 'system' && <div className="sp-system-content">
         <div className="sp-system-stats"><div><span>รอบทดลองที่เหลือวันนี้</span><strong>{remaining}<Sparkle size={25}/></strong></div><div><span>ทิศทางในครั้งนี้</span><strong>{history.length}<Flask size={25}/></strong></div><div><span>สูตรที่เก็บไว้</span><strong>{recipes.length}<BookmarkSimple size={25}/></strong></div></div>
         <ol className="sp-pipeline">{[
@@ -52,20 +54,30 @@ export default function StudioPanels({ panel, onClose, session, recipe = {}, onE
         <p className="sp-footnote">ช่วง AI Beta ทดลองฟรี มีจำนวนรอบต่อวันเพื่อรักษาความพร้อมของระบบ งานที่เริ่มประมวลผลแล้วอาจนับรอบแม้คุณเปลี่ยนวัตถุดิบหรือกดหยุด ยังไม่มีการเรียกเก็บเงิน</p>
         {history.length > 0 && <div className="sp-history-section"><h3>ทิศทางล่าสุด</h3><div className="sp-history-list">{history.map(item => <button key={item.id} onClick={() => { onRestore(item); onClose(); }}><img src={asset(item.generatedImage || item.productImage)} alt=""/><span><strong>{item.name}</strong><small>{item.concept?.title}</small></span><ArrowRight size={17}/></button>)}</div></div>}
       </div>}
-      {panel === 'export' && <div className="sp-export-content">
-        <div className="sp-export-intro">{recipe.generatedImage && <img src={asset(recipe.generatedImage)} alt={`ภาพแบรนด์ ${name}`}/>}<div><span className="sp-kicker">READY WHEN YOU ARE</span><h3>{name}</h3><p>{recipe.concept?.summary || recipe.words}</p></div></div>
-        <div className="sp-export-options">{[
-          { format: 'png', icon: Image, title: 'Artwork Art Direction', description: 'ภาพอาร์ตเวิร์ก 1600 × 1120 พร้อมข้อความและค่าที่คุณปรับ' },
-          { format: 'asset', icon: Sparkle, title: 'ภาพที่ AI สร้าง', description: 'ไฟล์ภาพต้นฉบับความละเอียดเต็ม สำหรับใช้ประกอบงานต่อ' },
-          { format: 'json', icon: FileText, title: 'สูตรและวัตถุดิบ', description: 'JSON รวมสูตร ภาพต้นฉบับ ภาพ AI และค่าปรับแต่งทั้งหมด' },
-          { format: 'html', icon: FileCode, title: 'Brand Guideline', description: 'HTML รวมภาพ ฟอนต์ และแนวทางแบรนด์ เปิดได้โดยไม่ต้องออนไลน์' },
-        ].filter(item => item.format !== 'asset' || recipe.generatedImage).map(item => <button key={item.format} className="sp-export-option" disabled={!!working} onClick={() => run(item.format, () => onExport(item.format), 'เตรียมไฟล์แล้ว ดูได้ในรายการดาวน์โหลดของเบราว์เซอร์')}><span className="sp-export-icon"><item.icon size={26}/></span><span><strong>{item.title}</strong><small>{item.description}</small></span><DownloadSimple size={22} className={working === item.format ? 'sp-downloading' : ''}/></button>)}</div>
-        <p className="sp-footnote">ไฟล์สำหรับงานดิจิทัล ตรวจข้อความและรายละเอียดก่อนนำไปใช้ ไฟล์นี้ยังไม่ใช่ไฟล์บรรจุภัณฑ์พร้อมผลิต</p>
+      {panel === 'export' && <div className="sp-bill-content">
+        <div className="sp-bill-recipe"><span>สูตรของ</span><h3>{name}</h3><p>{recipe.concept?.title || recipe.words}</p><div><span>{recipe.ingredients?.filter(Boolean).length || 0} วัตถุดิบ</span><span>1 ชุดแบรนด์</span></div></div>
+        <div className="sp-bill-column-head"><span>รายการที่พร้อมเสิร์ฟ</span><span>ดาวน์โหลด</span></div>
+        <ul className="sp-bill-items">{[
+          { format: 'png', type: 'PNG', title: 'Artwork Art Direction', description: 'อาร์ตเวิร์ก 1600 × 1120 พร้อมค่าที่ปรับไว้' },
+          { format: 'asset', type: 'PNG', title: 'ภาพที่ AI สร้าง', description: 'ต้นฉบับความละเอียดเต็ม ใช้ประกอบงานต่อ' },
+          { format: 'json', type: 'JSON', title: 'สูตรและวัตถุดิบ', description: 'สูตร ภาพต้นฉบับ ภาพ AI และค่าปรับแต่ง' },
+          { format: 'html', type: 'HTML', title: 'Brand Guideline', description: 'ภาพ ฟอนต์ และแนวทางแบรนด์ เปิดออฟไลน์ได้' },
+        ].filter(item => item.format !== 'asset' || recipe.generatedImage).map(item => <li key={item.format}><button disabled={!!working} onClick={() => run(item.format, () => onExport(item.format), 'เตรียมไฟล์แล้ว ดูได้ในรายการดาวน์โหลดของเบราว์เซอร์')} aria-label={`ดาวน์โหลด ${item.title}`}><span className="sp-bill-quantity">1</span><span className="sp-bill-item-name"><strong>{item.title}</strong><small>{item.description}</small></span><span className="sp-bill-file-type">{working === item.format ? 'กำลังเตรียม' : item.type}<DownloadSimple size={18} className={working === item.format ? 'sp-downloading' : ''}/></span></button></li>)}</ul>
+        <div className="sp-bill-perforation" aria-hidden="true"/>
+        <div className="sp-bill-total"><span>ยอดรวม<small>ทดลองใช้งาน AI Beta</small></span><strong>฿0</strong></div>
+        <p className="sp-bill-free">ไม่มีการเรียกเก็บเงิน · เลือกดาวน์โหลดแต่ละรายการได้เลย</p>
+        <div className="sp-bill-signoff"><Sparkle size={20} weight="fill"/><p>A LITTLE MIX. A LOT OF YOU.</p><span>ขอบคุณที่มาปรุงแบรนด์กับเรา</span></div>
+        <p className="sp-bill-note">ไฟล์สำหรับงานดิจิทัล โปรดตรวจข้อความและรายละเอียดก่อนนำไปใช้<br/>ยังไม่ใช่ไฟล์บรรจุภัณฑ์พร้อมผลิต</p>
       </div>}
       {panel === 'recipes' && <div className="sp-recipes-content">
-        <div className="sp-save-current"><div><span className="sp-kicker">YOUR CURRENT RECIPE</span><h3>{recipe.id ? name : 'เริ่มจากวัตถุดิบที่เป็นคุณ'}</h3><p>{recipe.id ? recipe.concept?.title : 'ใส่ภาพอย่างน้อย 2 ภาพ แล้วรอให้ปรุงเสร็จ'}</p></div><button className="sp-button sp-button--mint" disabled={!!working || !recipe.id} onClick={() => run('save', onSave, 'เก็บสูตรบน Slaply แล้ว')}><BookmarkSimple size={18}/>{working === 'save' ? 'กำลังเก็บ…' : 'เก็บสูตรนี้'}</button></div>
-        {recipes.length ? <div className="sp-recipe-grid">{recipes.map(item => <button key={item.id} className="sp-saved-recipe" onClick={() => { onLoadRecipe(item); onClose(); }}><img src={asset(item.generatedImage || item.productImage)} alt={`ภาพแบรนด์ ${item.name}`}/><div><span className="sp-kicker">SAVED RECIPE</span><h3>{item.name}</h3><p>{item.concept?.title}</p><span className="sp-recipe-load">เปิดสูตรนี้<ArrowRight size={17}/></span></div></button>)}</div> : <div className="sp-empty"><BookmarkSimple size={45}/><h3>ที่ว่างสำหรับสูตรแรกของคุณ</h3><p>ปรุงให้เสร็จ แล้วเก็บทิศทางที่ชอบไว้ได้เลย</p></div>}
-        <p className="sp-footnote">สูตรเชื่อมกับเบราว์เซอร์นี้ การล้างคุกกี้หรือใช้เบราว์เซอร์อื่นอาจทำให้เข้าถึงสูตรเดิมไม่ได้ ดาวน์โหลด JSON หรือ HTML เก็บเป็นสำเนาได้เสมอ</p>
+        <div className="sp-save-current"><div><span className="sp-kicker">YOUR CURRENT RECIPE</span><h3>{recipe.id ? name : 'เริ่มจากวัตถุดิบที่เป็นคุณ'}</h3><p>{recipe.id ? recipe.concept?.title : 'ใส่ภาพอย่างน้อย 2 ภาพ แล้วรอให้ปรุงเสร็จ'}</p></div><button className={`sp-button sp-button--mint ${isSaved ? 'is-saved' : ''}`} disabled={!!working || saving || !recipe.id || isSaved} onClick={() => run('save', onSave, 'เก็บสูตรแล้ว')}><BookmarkSimple size={18} weight={isSaved ? 'fill' : 'regular'} color={isSaved ? '#000000' : undefined}/>{working === 'save' || saving ? 'กำลังเก็บ…' : isSaved ? 'เก็บสูตรแล้ว' : 'เก็บสูตรนี้'}</button></div>
+        <div className="sp-recipe-toolbar" aria-label="รายการสูตร"><div className="sp-recipe-views"><button className={recipeView === 'saved' ? 'selected' : ''} aria-pressed={recipeView === 'saved'} onClick={() => setRecipeView('saved')}><BookmarkSimple size={16}/>สูตรของฉัน <span>{recipes.length}</span></button><button className={recipeView === 'trash' ? 'selected' : ''} aria-pressed={recipeView === 'trash'} disabled={!!working} onClick={() => { setRecipeView('trash'); run('load-trash', onLoadTrash, ''); }}><Trash size={16}/>ถังขยะ{trashedRecipes.length > 0 && <span>{trashedRecipes.length}</span>}</button></div></div>
+        {lastTrashed && <div className="sp-trash-undo" role="status"><span>ย้าย “{lastTrashed.name}” ไปถังขยะแล้ว</span><button disabled={!!working} onClick={() => run('restore-' + lastTrashed.id, () => onRestoreTrashedRecipe(lastTrashed.id), 'นำสูตรกลับมาแล้ว', () => setLastTrashed(null))}><ArrowCounterClockwise size={15}/>เลิกทำ</button></div>}
+        {working === 'load-trash' ? <p className="sp-recipe-loading" role="status">กำลังเปิดถังขยะ…</p> : shownRecipes.length ? <div className="sp-recipe-grid">{shownRecipes.map(item => <article key={item.id} className="sp-saved-recipe">
+          <button className="sp-recipe-open" disabled={recipeView === 'trash' || !!working} onClick={() => { onLoadRecipe(item); onClose(); }} aria-label={`เปิดสูตร ${item.name}`}><img src={asset(item.generatedImage || item.productImage)} alt={`ภาพแบรนด์ ${item.name}`}/><span className="sp-recipe-card-copy"><span className="sp-kicker">{recipeView === 'trash' ? 'IN THE BIN' : 'SAVED RECIPE'}</span><strong>{item.name}</strong><span>{item.concept?.title}</span>{recipeView === 'saved' && <span className="sp-recipe-load">เปิดสูตรนี้<ArrowRight size={17}/></span>}</span></button>
+          <div className="sp-recipe-card-actions">{recipeView === 'trash' ? <button className="sp-recipe-restore" disabled={!!working} onClick={() => run('restore-' + item.id, () => onRestoreTrashedRecipe(item.id), 'นำสูตรกลับมาแล้ว', () => { if(lastTrashed?.id === item.id)setLastTrashed(null); })}><ArrowCounterClockwise size={16}/>{working === 'restore-' + item.id ? 'กำลังกู้คืน…' : 'นำสูตรกลับมา'}</button> : <button className="sp-recipe-trash" disabled={!!working} aria-label={`ย้ายสูตร ${item.name} ไปถังขยะ`} onClick={() => run('trash-' + item.id, () => onTrashRecipe(item.id), '', () => setLastTrashed({id:item.id,name:item.name}))}><Trash size={17}/>{working === 'trash-' + item.id ? 'กำลังย้าย…' : 'ทิ้งสูตร'}</button>}</div>
+        </article>)}</div> : <div className="sp-empty">{recipeView === 'trash' ? <Trash size={45}/> : <BookmarkSimple size={45}/>}<h3>{recipeView === 'trash' ? 'ถังขยะยังว่างอยู่' : 'ที่ว่างสำหรับสูตรแรกของคุณ'}</h3><p>{recipeView === 'trash' ? 'สูตรที่ทิ้งไว้จะอยู่ที่นี่ และนำกลับมาได้' : 'ปรุงให้เสร็จ แล้วเก็บทิศทางที่ชอบไว้ได้เลย'}</p></div>}
+        <p className="sp-footnote">{recipeView === 'trash' ? 'การทิ้งสูตรย้ายออกจากรายการที่เก็บไว้เท่านั้น รูปต้นฉบับยังอยู่ และนำสูตรกลับมาได้' : 'สูตรเชื่อมกับเบราว์เซอร์นี้ การล้างคุกกี้หรือใช้เบราว์เซอร์อื่นอาจทำให้เข้าถึงสูตรเดิมไม่ได้ ดาวน์โหลด JSON หรือ HTML เก็บเป็นสำเนาได้เสมอ'}</p>
       </div>}
       {feedback && <p className="sp-feedback" role="status">{feedback}</p>}
     </section>

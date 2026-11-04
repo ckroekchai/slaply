@@ -60,3 +60,79 @@
 [data-theme='night'] .sp-dialog button:focus-visible{outline-color:#f2d866}
 [data-theme='night'] .sp-close:hover{background:#48425b}
 @media(max-width:650px){.sp-credit-rule{padding:14px;gap:10px;margin-bottom:20px}.sp-credit-rule strong{font-size:11px}.sp-credit-rule p{font-size:10px}}
+
+/* A saved mark reflects a confirmed version, not a disabled-looking action. */
+.keep-button.is-saved:disabled,.sp-dialog .sp-button.is-saved:disabled{opacity:1;cursor:default}
+.keep-button.is-saved>svg,.sp-dialog .sp-button.is-saved>svg{color:#000}
+
+/* Recipe cards keep opening and moving to the bin as separate controls. */
+.sp-recipe-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 20px}
+.sp-recipe-views{display:flex;gap:7px;flex-wrap:wrap}
+.sp-recipe-views button{display:flex;align-items:center;gap:7px;padding:10px 13px;border-radius:100px;border:1px solid #41465a;background:transparent;color:inherit;font-size:12px;cursor:pointer}
+.sp-recipe-views button.selected{background:#f2d866;color:#202442;border-color:#f2d866}
+.sp-recipe-views button>span{font-size:10px;border-radius:100px;background:#20244212;padding:2px 6px}
+.sp-recipe-grid .sp-saved-recipe{cursor:default;display:flex;flex-direction:column}
+.sp-recipe-open{display:block;flex:1;width:100%;border:0;padding:0;background:transparent;color:inherit;text-align:left;cursor:pointer}
+.sp-recipe-open>img{display:block;width:100%;height:150px;object-fit:cover}
+.sp-recipe-card-copy{display:block;padding:18px}
+.sp-recipe-card-copy>strong{display:block;font-size:21px;letter-spacing:-.5px;margin:6px 0;overflow-wrap:anywhere}
+.sp-recipe-card-copy>span:not(.sp-kicker):not(.sp-recipe-load){display:block;font-size:11px;opacity:.65;line-height:1.6}
+.sp-recipe-grid .sp-saved-recipe>.sp-recipe-card-actions{display:flex;justify-content:flex-end;padding:10px 14px;border-top:1px solid #41465a}
+.sp-recipe-card-actions button{display:inline-flex;align-items:center;gap:6px;background:transparent;border:0;color:inherit;font-size:11px;padding:7px 8px;border-radius:6px;cursor:pointer;opacity:.75}
+.sp-recipe-card-actions .sp-recipe-trash:hover{background:#ff876c20;color:#ffb39e;opacity:1}
+.sp-recipe-card-actions .sp-recipe-restore{opacity:1;color:#f2d866}
+.sp-dialog .sp-recipe-open:disabled{opacity:.62;cursor:default}
+.sp-trash-undo{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid #616746;background:#373e2c;color:#edf3d9;padding:12px 14px;border-radius:10px;font-size:12px;line-height:1.6;margin-bottom:20px}
+.sp-trash-undo>span{overflow-wrap:anywhere}
+.sp-trash-undo button{display:flex;align-items:center;gap:5px;flex-shrink:0;border:0;border-bottom:1px solid currentColor;background:transparent;color:inherit;padding:4px 0;font-size:12px;cursor:pointer}
+.sp-recipe-loading{padding:28px;text-align:center;font-size:13px;opacity:.7}
+[data-theme='day'] .sp-recipe-views button,[data-theme='day'] .sp-recipe-grid .sp-saved-recipe>.sp-recipe-card-actions{border-color:#dfd5c4}
+[data-theme='day'] .sp-recipe-card-actions .sp-recipe-trash:hover{color:#a53826;background:#a5382610}
+[data-theme='day'] .sp-recipe-card-actions .sp-recipe-restore{color:#315b3c}
+[data-theme='day'] .sp-trash-undo{background:#eef1df;border-color:#bac99a;color:#37502e}
+
+/* Export is a restaurant check: paper, line items, and a complimentary total. */
+.sp-dialog.sp-dialog--export{--bill-paper:#fffcf3;--bill-ink:#242638;width:min(610px,100%);background:var(--bill-paper);color:var(--bill-ink);border:0;border-radius:5px;padding:38px 40px 30px;box-shadow:0 28px 100px #0006;scrollbar-color:#cfc6b5 var(--bill-paper)}
+.sp-dialog--export .sp-close{width:30px;height:30px;right:15px;top:14px;background:#f2ecdf;color:var(--bill-ink);border:0}
+.sp-dialog--export .sp-close>svg{width:17px}
+.sp-dialog--export .sp-close:hover{background:#efddba}
+.sp-bill-header{text-align:center;padding:0 14px 24px}
+.sp-bill-wordmark{display:flex;align-items:center;justify-content:center;gap:2px;font-family:'Space Grotesk','Noto Sans Thai',sans-serif;font-weight:700;font-size:45px;letter-spacing:-3px;line-height:1.1}
+.sp-bill-wordmark>svg{color:#ee684c;margin-top:5px}
+.sp-bill-kicker{display:block;font-size:8px;letter-spacing:3.2px;margin:10px 0 28px}
+.sp-bill-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left}
+.sp-bill-heading h2{font-size:30px;line-height:1.3;letter-spacing:-.8px;margin:0;font-weight:600;color:var(--bill-ink)}
+.sp-bill-heading>span{font-size:9px;letter-spacing:.7px;border:1px solid #c5ba9f;padding:6px 8px;border-radius:3px;color:#68624f}
+.sp-bill-header>p{text-align:left;font-size:12px;color:#898270;margin:7px 0 0}
+.sp-bill-recipe{padding:21px 0 20px;border-top:1px dashed #c2baa6;border-bottom:1px dashed #c2baa6}
+.sp-bill-recipe>span{font-size:10px;color:#898270}
+.sp-dialog--export .sp-bill-recipe h3{font-size:24px;line-height:1.4;letter-spacing:-.5px;margin:4px 0;color:var(--bill-ink);overflow-wrap:anywhere}
+.sp-bill-recipe>p{font-size:11px;line-height:1.8;margin:0;max-width:460px;color:#817968;overflow-wrap:anywhere}
+.sp-bill-recipe>div{display:flex;justify-content:space-between;gap:12px;font-size:10px;margin-top:13px;color:#817968}
+.sp-bill-column-head{display:flex;justify-content:space-between;gap:12px;font-size:9px;color:#8c8270;letter-spacing:.3px;margin-top:23px;padding:0 0 8px}
+.sp-bill-items{list-style:none;padding:0;margin:0}
+.sp-bill-items li{border-bottom:1px dotted #d6cdbb}
+.sp-bill-items li:last-child{border-bottom:0}
+.sp-bill-items button{display:flex;align-items:center;gap:13px;width:100%;border:0;background:transparent;color:var(--bill-ink);padding:17px 0;text-align:left;cursor:pointer;transition:background .15s}
+.sp-bill-items button:hover{background:#f2ebdc}
+.sp-dialog--export .sp-bill-items button:focus-visible{outline:2px solid #c65b3f;outline-offset:3px}
+.sp-bill-quantity{font:11px 'Space Grotesk',sans-serif;color:#9a907d;align-self:flex-start;margin-top:3px}
+.sp-bill-item-name{flex:1;min-width:0}
+.sp-bill-item-name strong{display:block;font-size:13px;font-weight:500;line-height:1.5}
+.sp-bill-item-name small{display:block;font-size:9px;line-height:1.8;color:#928673;margin-top:3px}
+.sp-bill-file-type{display:flex;align-items:center;gap:9px;flex-shrink:0;font-size:9px;letter-spacing:.6px;color:#6a7158}
+.sp-bill-file-type>svg{color:#c05c42}
+.sp-bill-perforation{position:relative;height:1px;border-top:1px dashed #bdb29c;margin:20px -40px 23px}
+.sp-bill-total{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.sp-bill-total>span{font-size:17px;font-weight:600}
+.sp-bill-total small{display:block;font-size:10px;color:#938976;font-weight:400;margin-top:5px}
+.sp-bill-total>strong{font:600 34px 'Space Grotesk',sans-serif;letter-spacing:-1.5px}
+.sp-bill-free{font-size:10px;color:#8b826d;line-height:1.7;margin:13px 0 0}
+.sp-bill-signoff{text-align:center;margin-top:30px;padding-top:25px;border-top:1px dotted #c9bfab}
+.sp-bill-signoff>svg{color:#ec7053}
+.sp-bill-signoff p{font-size:9px;letter-spacing:1.7px;margin:9px 0 6px}
+.sp-bill-signoff>span{font-size:11px;color:#887d69}
+.sp-bill-note{text-align:center;font-size:8px;line-height:1.8;color:#a59b89;margin:24px 0 0}
+.sp-dialog--export .sp-feedback{background:#eef1df;color:#3d5530;border-color:#b6c49a;font-size:11px}
+@media(max-width:650px){.sp-dialog.sp-dialog--export{width:min(480px,100%);padding:32px 23px 27px;border-radius:4px}.sp-bill-header{padding-inline:5px}.sp-bill-wordmark{font-size:40px}.sp-bill-kicker{margin-bottom:24px}.sp-bill-heading h2{font-size:27px}.sp-bill-recipe{padding:18px 0}.sp-bill-items button{gap:9px;padding:15px 0}.sp-bill-item-name strong{font-size:12px}.sp-bill-item-name small{font-size:9px}.sp-bill-file-type{gap:5px;font-size:8px}.sp-bill-perforation{margin-inline:-23px}.sp-bill-total>strong{font-size:30px}.sp-recipe-card-copy{padding:17px}.sp-recipe-open>img{height:175px}.sp-trash-undo{align-items:flex-start;font-size:11px}.sp-recipe-views button{font-size:11px;padding:10px 12px}}
+@media(max-height:740px){.sp-dialog.sp-dialog--export{padding:22px 30px 20px}.sp-bill-header{display:grid;grid-template-columns:1fr auto;gap:3px 18px;align-items:center;padding:0 32px 14px 0;text-align:left}.sp-bill-wordmark{justify-content:flex-start;font-size:30px;letter-spacing:-2px}.sp-bill-wordmark>svg{width:18px}.sp-bill-kicker{grid-column:1;margin:3px 0 0;font-size:6px;letter-spacing:2px}.sp-bill-heading{grid-column:2;grid-row:1 / 3;flex-direction:column;align-items:flex-end;gap:4px}.sp-bill-heading h2{font-size:22px}.sp-bill-heading>span{font-size:7px;padding:3px 6px}.sp-bill-header>p{display:none}.sp-bill-recipe{padding:11px 0}.sp-bill-recipe>span{font-size:8px}.sp-dialog--export .sp-bill-recipe h3{font-size:19px;margin:1px 0}.sp-bill-recipe>p{display:none}.sp-bill-recipe>div{margin-top:5px;font-size:9px}.sp-bill-column-head{margin-top:14px;padding-bottom:4px;font-size:8px}.sp-bill-items button{padding:10px 0;gap:10px}.sp-bill-item-name strong{font-size:12px}.sp-bill-item-name small{font-size:8px;line-height:1.5;margin-top:2px}.sp-bill-perforation{margin:13px -30px 15px}.sp-bill-total>span{font-size:15px}.sp-bill-total>strong{font-size:28px}.sp-bill-total small{font-size:9px;margin-top:2px}.sp-bill-free{font-size:9px;margin-top:8px}.sp-bill-signoff{display:none}.sp-bill-note{font-size:7px;line-height:1.5;margin-top:15px}}

@@ -32,7 +32,7 @@ Run the following release commands from `brand-pot/`; root `npm run deploy:cloud
 
 1. `npm ci`, `npm test`, `npm run build`. Authenticate Wrangler to the intended Cloudflare account before remote operations.
 2. Apply additive migrations: `npx wrangler d1 migrations apply SLAPLY_DB --remote`; add `--env production` only for the production release. Deploy commands do not automatically apply migrations.
-3. `npm run deploy:preview`. Check API smoke, one real generation, save/reload/export, desktop/mobile and provider failures. A secret with the right name is not proof that its value is valid.
+3. `npm run deploy:preview`. Check API smoke, save/reload/export, desktop/mobile and provider failures. For AI-pipeline changes, also check one real generation; UI-only releases can use a local simulated API for loading-state verification without paid generation. A secret with the right name is not proof that its value is valid.
 4. `npm run deploy:production`, then verify both domains and a production flow. `www.slaply.co` redirects to `slaply.co` so browser identity stays on one host.
 5. Keep code in GitHub synchronized with the deployed source. Do not deploy the old Next.js audit app.
 
@@ -52,7 +52,7 @@ The old audit/payment database tables were retained. Brand Pot migrations add on
 
 ## Operating limits and privacy
 
-- Original JPG/PNG/WebP uploads: at most 5 MiB each, two to six per job, at most 12 MiB combined. Original bytes are preserved in R2.
+- Original JPG/PNG/WebP uploads: at most 5 MiB each, two to six per job, at most 18 MiB combined. Original bytes are preserved in R2.
 - Generated illustration is stored separately. Original product imagery and exact text are rendered by code.
 - Jobs are admitted atomically against daily browser/IP/global caps. The day boundary is Bangkok time. Failed and cancelled attempts consume admission allowance because provider cost may already have occurred.
 - Provider calls have bounded timeouts and no automatic paid retry. A user retry is explicit. Polling retries and reload recovery reuse a durable job without a new generation.
@@ -68,7 +68,7 @@ D1 `brand_jobs` records prompt/model versions, status, timing, usage and sanitiz
 
 The pipeline stores original bytes before admitting a generation. A completed image is written to R2 and recorded in `brand_assets` before the final recipe becomes `ready` in D1. The ready update is conditional on the job still being active, so a cancelled or superseded job cannot publish over the current result. Paid provider steps are not automatically retried; the final storage step can retry without calling the model again. Interrupted terminal Workflows are reconciled to explicit failures, and a lost workflow-creation response is recovered by the stable job ID.
 
-Saving creates a version in `brand_recipes` while retaining the original job and asset references. Only editable name, description, concept and customization fields are accepted from the client; asset URLs and AI metadata come from the server's original recipe. Reopening defaults to the newest saved version when it is newer than the newest completed generation. The beta stores at most 200 saved versions per browser session and currently lists the newest 40; it does not yet expose pagination or deletion controls.
+Saving creates a version in `brand_recipes` while retaining the original job and asset references. Only editable name, description, concept and customization fields are accepted from the client; asset URLs and AI metadata come from the server's original recipe. Reopening defaults to the newest saved version when it is newer than the newest completed generation. The beta stores at most 200 saved versions per browser session (including recoverable trash) and lists the newest 40 active versions. Trash hides a saved version without deleting recipe JSON, original uploads, generated assets or jobs. The recipe book exposes undo and a trash view with restore; there is no permanent-delete or purge action. Trashed versions and their original generated fallback are excluded from automatic reopening. Pagination is not yet exposed.
 
 Provider authentication failures produce public code `AI_CONFIGURATION`. Provider usage rows keep status, provider code and request ID; failed structured-output validation additionally records safe field types, lengths, counts and validity flags under `usage_json.validation`. Error messages are whitelisted before crossing the Workflow step serialization boundary. Use these diagnostics to identify a failed stage without collecting the raw model text in logs.
 
@@ -82,3 +82,23 @@ See `ai-quality.md` and `evals/cases.json` for the quality matrix. A successful 
 - Source checks: 54 tests; build passed. Production paid integration: 17 automated checks; final deployed smoke: 10 checks.
 - Browser real generation, edits, save/reload and PNG/JSON/HTML exports verified; source image bytes preserved. See `../../design-qa.md`.
 - GitHub Actions runs tests and build. Deployments use the documented Wrangler release commands; CI does not hold a deployment credential.
+
+## Annotation refinements — 2026-11-04
+
+Apply `0002_recipe_trash.sql` to each environment **before** deploying this release. It adds `brand_recipes.deleted_at` and an index; existing recipes remain active and no rows or asset files are removed. Older Worker code remains compatible with the additive schema.
+
+- Total original input limit is 18 MiB; per-image limit stays 5 MiB. Backend checks use trusted stored byte sizes before admitting a paid job; new recipes include byte metadata for browser preflight.
+- Saved status compares the confirmed saved content against the working recipe. Changing editable content makes it unsaved; failed or in-flight saves never falsely mark new edits saved.
+- Recipe trash/restore endpoints enforce the same owner and mutation-origin checks as other mutations. `DELETE /api/recipes/:id` moves to trash, `POST /api/recipes/:id/restore` restores, and `GET /api/recipes?trash=1` lists recoverable versions. No permanent deletion exists.
+- The export panel is a restaurant-style receipt with existing PNG/AI image/JSON/HTML downloads. The shown total is free Beta (฿0); no payment integration or charge is added.
+- Pot rattle respects both the manual reduced-motion switch and the operating-system preference. Sliders follow the rendered brand ink color.
+- Source validation: 63 tests passed; Vite production build passed. Local browser loading/save/trash tests used a clearly isolated simulated API and made no paid AI calls.
+
+Release evidence for these refinements:
+
+- Production: `965c1291-e59a-4ac1-9695-0d17cb0fe0bc`; preview: `d23e132b-df9c-4877-8936-fa8f31f2adac`.
+- Frontend: `index-CfSSYjIe.js` and `index-2WtgM2OQ.css`.
+- Migration 0002 applied successfully to preview and production before Worker deployment.
+- Both deployed smoke runs passed 10 checks (`evals/results/annotation-preview-smoke.json` and `annotation-production-smoke.json`, local evidence).
+- Production browser verified saved status, brand colors, receipt, private test-recipe trash across reload and exact restoration. JSON downloaded through the receipt retained both original images byte-for-byte and the saved edits.
+- No additional paid AI generation was submitted for these UI refinements. Preview AI credential limitation remains as documented above.

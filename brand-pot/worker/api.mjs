@@ -1,4 +1,4 @@
-import { HttpError, MAX_UPLOAD_BYTES, SESSION_DAYS, UUID, assertMutationOrigin, cookieValue, sessionCookie, randomToken, hash, day, now, limits, models, safeName, sniffImage, validateJob, savedRecipe, publicError } from './core.mjs';
+import { HttpError, MAX_UPLOAD_BYTES, MAX_JOB_UPLOAD_BYTES, SESSION_DAYS, UUID, assertMutationOrigin, cookieValue, sessionCookie, randomToken, hash, day, now, limits, models, safeName, sniffImage, validateJob, savedRecipe, publicError } from './core.mjs';
 
 const JSON_HEADERS = { 'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin' };
 export function json(body, status=200, extra={}) { return new Response(JSON.stringify(body), {status,headers:{...JSON_HEADERS,...extra}}); }
@@ -39,8 +39,9 @@ async function sessionInfo(request,env) {
   const [allowance,pendingJob,latest,saved]=await Promise.all([
     quota(request,env,current),
     db(env).prepare("SELECT id,status,phase FROM brand_jobs WHERE session_id = ? AND status IN ('queued','analyzing','generating') ORDER BY created_at DESC LIMIT 1").bind(current.id).first(),
-    db(env).prepare("SELECT recipe_json FROM brand_jobs WHERE session_id = ? AND status = 'ready' ORDER BY created_at DESC LIMIT 1").bind(current.id).first(),
-    db(env).prepare('SELECT recipe_json, created_at FROM brand_recipes WHERE session_id = ? ORDER BY created_at DESC LIMIT 1').bind(current.id).first(),
+    // A trashed saved recipe must not reappear as its original generated job on reload.
+    db(env).prepare("SELECT recipe_json FROM brand_jobs WHERE session_id = ? AND status = 'ready' AND NOT EXISTS (SELECT 1 FROM brand_recipes WHERE brand_recipes.job_id = brand_jobs.id AND brand_recipes.session_id = brand_jobs.session_id AND deleted_at IS NOT NULL) ORDER BY created_at DESC LIMIT 1").bind(current.id).first(),
+    db(env).prepare('SELECT recipe_json, created_at FROM brand_recipes WHERE session_id = ? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1').bind(current.id).first(),
   ]);
   const latestGenerated=latest?.recipe_json?JSON.parse(latest.recipe_json):null;
   const latestRecipe=saved&&(!latestGenerated||saved.created_at>=latestGenerated.createdAt)?JSON.parse(saved.recipe_json):latestGenerated;
@@ -74,7 +75,7 @@ async function upload(request,env,current) {
 async function ownedAssets(env,current,ingredients) {
   const assets=await Promise.all(ingredients.map(item=>db(env).prepare("SELECT * FROM brand_assets WHERE id = ? AND session_id = ? AND kind = 'original' AND state = 'ready'").bind(item.id,current.id).first()));
   if(assets.some(x=>!x))throw notFound();
-  if(assets.reduce((sum,asset)=>sum+asset.bytes,0)>12*1024*1024)throw new HttpError(400,'INPUT_TOTAL_TOO_LARGE','รูปในสูตรนี้รวมกันเกิน 12 MB กรุณาเลือกรูปขนาดเล็กลง');
+  if(assets.reduce((sum,asset)=>sum+asset.bytes,0)>MAX_JOB_UPLOAD_BYTES)throw new HttpError(400,'INPUT_TOTAL_TOO_LARGE','รูปในสูตรนี้รวมกันเกิน 18 MB กรุณาเลือกรูปขนาดเล็กลง');
   return assets;
 }
 async function ensureWorkflow(env,id) {
@@ -154,6 +155,22 @@ async function saveRecipe(request,env,current) {
   if(!result.meta.changes)throw new HttpError(409,'SAVE_CONFLICT','บันทึกพร้อมกันหรือสูตรเต็มแล้ว กรุณาลองอีกครั้ง');
   return json({recipe,persisted:true},201);
 }
+function recipeView(row) {
+  const recipe=JSON.parse(row.recipe_json);
+  return row.deleted_at?{...recipe,trashedAt:row.deleted_at}:recipe;
+}
+async function trashRecipe(env,current,id,restore=false) {
+  const row=await db(env).prepare('SELECT recipe_json,deleted_at FROM brand_recipes WHERE id = ? AND session_id = ?').bind(id,current.id).first();
+  if(!row)throw notFound();
+  if(restore){
+    await db(env).prepare('UPDATE brand_recipes SET deleted_at = NULL WHERE id = ? AND session_id = ?').bind(id,current.id).run();
+    return json({recipe:JSON.parse(row.recipe_json),restored:true});
+  }
+  // Repeated DELETE requests preserve the original trash timestamp.
+  await db(env).prepare('UPDATE brand_recipes SET deleted_at = COALESCE(deleted_at, ?) WHERE id = ? AND session_id = ?').bind(now(),id,current.id).run();
+  const trashed=await db(env).prepare('SELECT recipe_json,deleted_at FROM brand_recipes WHERE id = ? AND session_id = ?').bind(id,current.id).first();
+  return json({recipe:recipeView(trashed),trashed:true});
+}
 export async function handleApi(request,env) {
   try {
     const url=new URL(request.url),path=url.pathname,method=request.method;
@@ -173,10 +190,18 @@ export async function handleApi(request,env) {
     const assetMatch=/^\/api\/assets\/([0-9a-f-]+)$/.exec(path);
     if(assetMatch&&UUID.test(assetMatch[1])&&['GET','HEAD'].includes(method))return await asset(env,current,assetMatch[1],method);
     if(path==='/api/recipes'&&method==='GET'){
-      const rows=await db(env).prepare('SELECT recipe_json FROM brand_recipes WHERE session_id = ? ORDER BY created_at DESC LIMIT 40').bind(current.id).all();
-      return json({recipes:rows.results.map(row=>JSON.parse(row.recipe_json))});
+      const trash=url.searchParams.get('trash')==='1';
+      const rows=await db(env).prepare(trash
+        ?'SELECT recipe_json,deleted_at FROM brand_recipes WHERE session_id = ? AND deleted_at IS NOT NULL ORDER BY deleted_at DESC LIMIT 200'
+        :'SELECT recipe_json,deleted_at FROM brand_recipes WHERE session_id = ? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 40').bind(current.id).all();
+      return json({recipes:rows.results.map(recipeView)});
     }
     if(path==='/api/recipes'&&method==='POST')return await saveRecipe(request,env,current);
+    const recipeMatch=/^\/api\/recipes\/([0-9a-f-]+)(\/restore)?$/.exec(path);
+    if(recipeMatch&&UUID.test(recipeMatch[1])){
+      if(method==='DELETE'&&!recipeMatch[2])return await trashRecipe(env,current,recipeMatch[1]);
+      if(method==='POST'&&recipeMatch[2])return await trashRecipe(env,current,recipeMatch[1],true);
+    }
     throw notFound();
   } catch(error) { const safe=publicError(error);if(!(error instanceof HttpError))console.error('brand_api_failure',error?.name||'Error');return json(safe.body,safe.status); }
 }

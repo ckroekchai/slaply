@@ -46,3 +46,40 @@ This pass covers the web flow and its fidelity, not universal model quality. The
 - [x] Verify production upload, generation, save, reload, customization and export.
 - [x] Check mobile overflow and production console.
 - [x] Document Beta constraints and broader evaluation gap.
+
+## Browser annotation release — seven requested refinements
+
+final result: passed
+
+### Source and comparison
+
+The seven user browser comments and marked screenshots are the requested-change source. Current production was captured before changes, then compared with the deployed result at the same 1017 × 588 CSS viewport (DPR 2). Both receipt images were opened together in one comparison input, as were both full-page images. Local screenshot files under `brand-pot/qa/annotations/` remain ignored and unpublished.
+
+- Before: `before-page.png`, `before-export.png`.
+- After: `after-page.png`, `after-export.png`. Same FOLKJA recipe, five originals and unchanged customizations; carousel set back to slot six for final comparison. The status below the pot changes from freshly served to restored-recipe wording after reload, an existing runtime behavior.
+- Local mobile evidence: `local-receipt-mobile.png`, viewport 390 × 844; document width 390, no horizontal overflow.
+- Production reversible-trash evidence: `production-trash.png`, using the agent's separate POKO QA recipe; user FOLKJA recipe remained intact.
+
+### Requested behavior and evidence
+
+1. **Only the name arrow moves.** Final arrow right edge 290.898px; pot image left edge 298.5px (7.602px clearance). Note bounds (left168.187/top622.397) and pot bounds (left298.5/top516.859/420×280) match the baseline. The final arrow translation is -34px; note and pot positions are unchanged.
+2. **18 MB combined upload limit.** UI copy and preflight updated; authoritative backend accepts exactly18MiB and rejects18MiB+1byte before quota admission. Individual limit remains5MiB. Older recipes without byte metadata still receive the server check.
+3. **Subtle boiling rattle.** Actual local UI generation action activates `pot-rattle`, 0.48s stepped loop, ≤1px translation and0.24deg rotation. Both moving and resting transforms observed. Manual reduced motion yields animation:none; stopping generation removes the animation. OS reduced-motion rule is also present. This loading-state check used an isolated local simulated API, not a paid generation.
+4. **Confirmed saved state.** Save produces filled black SVG (`fill=#000000`) and “เก็บสูตรแล้ว”; slider edit returns “เก็บสูตรนี้”. Production reload recognizes the user's already-saved recipe. Snapshot tests cover failed save and edits while save is in flight.
+5. **Brand-colored sliders.** All five live FOLKJA sliders use rgb(23,62,51), the rendered brand ink. Local POKO recipe uses rgb(24,75,58). Native range appearance and keyboard operation retained.
+6. **Restaurant bill downloads.** Cream receipt, Slaply wordmark, line items, quantity, file types, dashed separators and ฿0 Beta total. All four download rows visible at1017×588 after compact-height refinement. Main CTA remains “ดาวน์โหลด”. Actual JSON download from the new receipt preserved edited concept, selected objects, embedded AI image and both original images byte-for-byte. No payment action added.
+7. **Trash button on saved cards.** Separate accessible button, not nested in the open-recipe button. Real production test moved one agent QA recipe to trash, reloaded, confirmed it did not reopen, restored it, and reopened exact edited content. Local test also covered undo. No permanent deletion or asset removal.
+
+### Iterations and fidelity surfaces
+
+- Initial arrow adjustment was insufficient against bounding boxes; final -34px leaves a visible gap.
+- Initial receipt was too tall for the annotated short viewport. Added compact-height layout so all four downloads and total are visible; mobile retains a longer readable receipt with internal scrolling.
+- Typography: existing local fonts preserved; short-screen receipt uses a compact hierarchy; exact save copy matches the request.
+- Spacing: original hero, ingredients, note and pot geometry retained. Only arrow position and requested receipt/card controls change.
+- Colors: cream/coral/navy application preserved; saved icon black and sliders use brand ink as requested.
+- Images: original pot and user imagery unchanged; receipt intentionally replaces the previous hero-thumbnail layout with bill line items.
+- Copy: total18MB, confirmed saved label, receipt and recoverable-trash wording updated within scope. Payment integration remains deferred.
+
+### Release checks
+
+63 automated tests passed, Vite production build passed, preview and production smoke each passed10 checks. Production console showed no warnings/errors. Additive migration0002 applied before both deploys. Production version `965c1291-e59a-4ac1-9695-0d17cb0fe0bc`; preview `d23e132b-df9c-4877-8936-fa8f31f2adac`. www remains308 to the apex. No additional paid AI call was made for this refinement pass; broader model-quality evaluation remains outside these seven UI corrections.

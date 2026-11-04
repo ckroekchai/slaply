@@ -1,15 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { handleApi } from '../worker/api.mjs';
-import { sniffImage,validateJob,validateAnalysis,analysisDiagnostics,savedRecipe,sessionCookie,buildRecipe,providerError,hash,day,now } from '../worker/core.mjs';
+import { MAX_UPLOAD_BYTES,MAX_JOB_UPLOAD_BYTES,sniffImage,validateJob,validateAnalysis,analysisDiagnostics,savedRecipe,sessionCookie,buildRecipe,providerError,hash,day,now } from '../worker/core.mjs';
 import { captureStageFailure, publicJobFailure } from '../worker/failures.mjs';
 
 const origin='https://slaply.co';
 const png=Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=','base64'));
 function environment(extra={}){
-  const sql=new DatabaseSync(':memory:');sql.exec(readFileSync(new URL('../migrations/0001_brand_pot.sql',import.meta.url),'utf8'));
+  const sql=new DatabaseSync(':memory:');
+  for(const migration of readdirSync(new URL('../migrations/',import.meta.url)).filter(name=>name.endsWith('.sql')).sort())sql.exec(readFileSync(new URL(`../migrations/${migration}`,import.meta.url),'utf8'));
   function prepared(query,params=[]){return {bind(...values){return prepared(query,values);},async first(){return sql.prepare(query).get(...params)||null;},async all(){return {results:sql.prepare(query).all(...params)};},async run(){const result=sql.prepare(query).run(...params);return {meta:{changes:Number(result.changes)}};},query,params};}
   const storage=new Map(),instances=new Map();let created=0;
   const env={SLAPLY_DB:{prepare:prepared,async batch(statements){sql.exec('BEGIN');try{const result=statements.map(s=>({meta:{changes:Number(sql.prepare(s.query).run(...s.params).changes)}}));sql.exec('COMMIT');return result;}catch(e){sql.exec('ROLLBACK');throw e;}}},SLAPLY_UPLOADS:{async put(key,bytes,options){storage.set(key,{body:bytes,...options});},async get(key){return storage.get(key)||null;},async head(key){return storage.get(key)||null;}},OPENAI_API_KEY:'test-key-never-used',BRAND_GENERATION:{async create({id}){if(instances.has(id))throw new Error('Already exists');created++;instances.set(id,{status:'queued'});return {id};},async get(id){return {async status(){if(!instances.has(id))throw new Error('Not found');return instances.get(id);}};}},...extra};
@@ -29,6 +30,14 @@ async function upload(ctx,cookie,name='ingredient.png'){const form=new FormData(
 async function inputs(ctx,cookie){const [a,b]=await Promise.all([upload(ctx,cookie,'first.png'),upload(ctx,cookie,'second.png')]);return {ingredients:[{id:a.id,locked:true},{id:b.id,locked:false}],brief:{name:'ทดสอบแบรนด์',words:'สดใส เรียบง่าย'}};}
 const requestBody=base=>({...base,idempotencyKey:crypto.randomUUID()});
 const analysis={proposedName:'Test',concept:{title:'สดใสในทุกวัน',summary:'แนวคิดจากสีและรูปทรงในภาพ'},mood:'fresh',palette:['#558844','#EEAA66','#223344'],paper:'#FFF9EE',ink:'#202442',keywords:['สดใส','เรียบง่าย','สนุก'],audience:'ผู้ชมที่ผู้ใช้ระบุ',promise:'ออกแบบให้สื่อสารชัดเจน',observations:[{ingredientIndex:1,observed:'รูปทรงสีเขียว',inspiration:'รูปทรงโค้ง'},{ingredientIndex:2,observed:'สีส้ม',inspiration:'จุดเน้นสีส้ม'}],imagePrompt:'Original abstract forms in green and orange.'};
+async function completedRecipe(ctx,cookie){
+  const created=await call(ctx,'/api/jobs',{method:'POST',cookie,body:requestBody(await inputs(ctx,cookie))});
+  const job=ctx.sql.prepare('SELECT * FROM brand_jobs WHERE id=?').get(created.data.id),assets=ctx.sql.prepare('SELECT * FROM brand_assets WHERE session_id=? ORDER BY created_at').all(job.session_id);
+  const recipe=buildRecipe(job,analysis,assets,crypto.randomUUID(),ctx.env);
+  ctx.sql.prepare("UPDATE brand_jobs SET status='ready',phase='ready',recipe_json=? WHERE id=?").run(JSON.stringify(recipe),job.id);
+  const saved=await call(ctx,'/api/recipes',{method:'POST',cookie,body:{recipe:{...recipe,name:'สูตรที่บันทึก',customization:{hue:18,objectStyles:[]}}}});
+  assert.equal(saved.status,201);return saved.data.recipe;
+}
 
 test('session cookie is opaque, HttpOnly, secure, isolated, and not in JSON',async()=>{
   const ctx=environment(),a=await call(ctx,'/api/session'),b=await call(ctx,'/api/session');
@@ -82,8 +91,20 @@ test('cross-owner job inputs, reads, cancellation and saves return 404',async()=
 test('malformed and overlarge aggregate inputs do not spend quota',async()=>{
   const ctx=environment(),cookie=await start(ctx),base=await inputs(ctx,cookie);
   assert.equal((await call(ctx,'/api/jobs',{method:'POST',cookie,body:requestBody({...base,ingredients:[base.ingredients[0]]})})).status,400);
-  ctx.sql.prepare('UPDATE brand_assets SET bytes = ?').run(7*1024*1024);
+  for(let i=0;i<2;i++){const extra=await upload(ctx,cookie,`extra-${i}.png`);base.ingredients.push({id:extra.id,locked:false});}
+  ctx.sql.prepare('UPDATE brand_assets SET bytes = ?').run(5*1024*1024);
   const result=await call(ctx,'/api/jobs',{method:'POST',cookie,body:requestBody(base)});assert.equal(result.data.error.code,'INPUT_TOTAL_TOO_LARGE');assert.equal(ctx.sql.prepare('SELECT count(*) AS n FROM brand_jobs').get().n,0);assert.equal(ctx.created,0);
+});
+test('aggregate admission accepts exactly 18 MiB and rejects one byte over before another quota reservation',async()=>{
+  assert.equal(MAX_UPLOAD_BYTES,5*1024*1024);assert.equal(MAX_JOB_UPLOAD_BYTES,18*1024*1024);
+  const ctx=environment(),cookie=await start(ctx),base=await inputs(ctx,cookie);
+  for(let i=0;i<2;i++){const extra=await upload(ctx,cookie,`extra-${i}.png`);base.ingredients.push({id:extra.id,locked:false});}
+  const sizes=[5,5,5,3].map(v=>v*1024*1024);
+  base.ingredients.forEach((item,index)=>ctx.sql.prepare('UPDATE brand_assets SET bytes=? WHERE id=?').run(sizes[index],item.id));
+  const exact=await call(ctx,'/api/jobs',{method:'POST',cookie,body:requestBody(base)});assert.equal(exact.status,202);
+  ctx.sql.prepare('UPDATE brand_assets SET bytes=bytes+1 WHERE id=?').run(base.ingredients[3].id);
+  const over=await call(ctx,'/api/jobs',{method:'POST',cookie,body:requestBody(base)});assert.equal(over.status,400);assert.equal(over.data.error.code,'INPUT_TOTAL_TOO_LARGE');assert.match(over.data.error.message,/18 MB/);
+  assert.equal(ctx.sql.prepare('SELECT count(*) AS n FROM brand_jobs').get().n,1);assert.equal(ctx.created,1);
 });
 test('runtime termination becomes a recoverable failed job rather than polling forever',async()=>{
   const ctx=environment(),cookie=await start(ctx),created=await call(ctx,'/api/jobs',{method:'POST',cookie,body:requestBody(await inputs(ctx,cookie))});
@@ -99,9 +120,33 @@ test('cancel is idempotent and a completed job cannot be cancelled retroactively
 test('saved version persists edits and ignores forged image/AI fields; session restores saved state',async()=>{
   const ctx=environment(),cookie=await start(ctx),created=await call(ctx,'/api/jobs',{method:'POST',cookie,body:requestBody(await inputs(ctx,cookie))}),job=ctx.sql.prepare('SELECT * FROM brand_jobs WHERE id=?').get(created.data.id),assets=ctx.sql.prepare('SELECT * FROM brand_assets ORDER BY created_at').all();
   const recipe=buildRecipe(job,analysis,assets,crypto.randomUUID(),ctx.env);ctx.sql.prepare("UPDATE brand_jobs SET status='ready',phase='ready',recipe_json=? WHERE id=?").run(JSON.stringify(recipe),job.id);
+  assert.equal(recipe.ingredients[0].bytes,png.length);
   const save=await call(ctx,'/api/recipes',{method:'POST',cookie,body:{recipe:{...recipe,name:'แก้ชื่อ',concept:{title:'แก้แนวคิด',summary:'คำอธิบายใหม่'},generatedImage:'https://evil.test/x',ai:{status:'fake'},customization:{hue:18,objectStyles:[]}}}});
   assert.equal(save.status,201);assert.equal(save.data.recipe.generatedImage,recipe.generatedImage);assert.equal(save.data.recipe.ai.status,'generated');assert.equal(save.data.recipe.concept.title,'แก้แนวคิด');assert.equal(save.data.recipe.name,'แก้ชื่อ');assert.deepEqual(save.data.recipe.customization.objectStyles,[]);
   assert.equal((await call(ctx,'/api/session',{cookie})).data.latestRecipe.name,'แก้ชื่อ');assert.equal((await call(ctx,'/api/recipes',{cookie})).data.recipes.length,1);
+});
+test('recipe trash is reversible and never deletes original assets or jobs',async()=>{
+  const ctx=environment(),cookie=await start(ctx),recipe=await completedRecipe(ctx,cookie),path=`/api/recipes/${recipe.id}`;
+  const before={assets:ctx.sql.prepare('SELECT COUNT(*) AS n FROM brand_assets').get().n,jobs:ctx.sql.prepare('SELECT COUNT(*) AS n FROM brand_jobs').get().n,objects:ctx.storage.size};
+  const removed=await call(ctx,path,{method:'DELETE',cookie});assert.equal(removed.status,200);assert.equal(removed.data.trashed,true);assert.equal(removed.data.recipe.id,recipe.id);assert.equal(removed.data.recipe.jobId,recipe.jobId);assert.match(removed.data.recipe.trashedAt,/^\d{4}-/);
+  assert.deepEqual((await call(ctx,'/api/recipes',{cookie})).data.recipes,[]);
+  const trash=(await call(ctx,'/api/recipes?trash=1',{cookie})).data.recipes;assert.equal(trash.length,1);assert.equal(trash[0].id,recipe.id);
+  assert.equal((await call(ctx,'/api/session',{cookie})).data.latestRecipe,null,'Trashed recipe must not reappear as its source generation');
+  assert.equal((await call(ctx,`/api/jobs/${recipe.jobId}`,{cookie})).data.status,'ready');assert.deepEqual((await call(ctx,recipe.ingredients[0].src,{cookie})).data,png);
+  assert.equal(ctx.sql.prepare('SELECT COUNT(*) AS n FROM brand_assets').get().n,before.assets);assert.equal(ctx.sql.prepare('SELECT COUNT(*) AS n FROM brand_jobs').get().n,before.jobs);assert.equal(ctx.storage.size,before.objects);
+  const repeated=await call(ctx,path,{method:'DELETE',cookie});assert.equal(repeated.data.recipe.trashedAt,removed.data.recipe.trashedAt);
+  const restored=await call(ctx,path+'/restore',{method:'POST',cookie,body:{}});assert.equal(restored.status,200);assert.equal(restored.data.restored,true);assert.deepEqual(restored.data.recipe,recipe);
+  assert.equal((await call(ctx,'/api/recipes',{cookie})).data.recipes[0].id,recipe.id);assert.deepEqual((await call(ctx,'/api/recipes?trash=1',{cookie})).data.recipes,[]);assert.equal((await call(ctx,'/api/session',{cookie})).data.latestRecipe.name,'สูตรที่บันทึก');
+  assert.equal((await call(ctx,path+'/restore',{method:'POST',cookie,body:{}})).status,200);
+});
+test('trash and restore enforce ownership and origin without exposing other sessions',async()=>{
+  const ctx=environment(),owner=await start(ctx),other=await start(ctx),recipe=await completedRecipe(ctx,owner),path=`/api/recipes/${recipe.id}`;
+  assert.equal((await call(ctx,path,{method:'DELETE',cookie:other})).status,404);assert.equal((await call(ctx,path+'/restore',{method:'POST',cookie:other,body:{}})).status,404);
+  assert.equal((await call(ctx,`/api/recipes/${crypto.randomUUID()}`,{method:'DELETE',cookie:owner})).status,404);assert.equal((await call(ctx,`/api/recipes/${crypto.randomUUID()}/restore`,{method:'POST',cookie:owner,body:{}})).status,404);
+  assert.equal((await call(ctx,`/api/recipes/${recipe.jobId}`,{method:'DELETE',cookie:owner})).status,404,'Saved recipe ids, not job ids, are deletable');
+  const crossSite=await handleApi(new Request(origin+path,{method:'DELETE',headers:{Cookie:owner,Origin:'https://evil.test'}}),ctx.env);assert.equal(crossSite.status,403);
+  await call(ctx,path,{method:'DELETE',cookie:owner});assert.deepEqual((await call(ctx,'/api/recipes?trash=1',{cookie:other})).data.recipes,[]);assert.equal((await call(ctx,path+'/restore',{method:'POST',cookie:other,body:{}})).status,404);
+  assert.equal((await call(ctx,'/api/recipes?trash=1')).status,401);
 });
 test('payments are inactive and health never exposes credentials',async()=>{
   const ctx=environment(),cookie=await start(ctx);

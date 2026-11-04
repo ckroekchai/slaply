@@ -1,5 +1,6 @@
 export const PROMPT_VERSION = 'brand-pot-2026-11-04.1';
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+export const MAX_JOB_UPLOAD_BYTES = 18 * 1024 * 1024;
 export const SESSION_DAYS = 90;
 export const ACTIVE_STATUSES = ['queued', 'analyzing', 'generating'];
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -140,7 +141,7 @@ export function analysisDiagnostics(data, count, suppliedName = '') {
 }
 export function buildRecipe(job, analysis, assets, imageId, env) {
   const input = JSON.parse(job.input_json);
-  const ingredients = input.ingredients.map((item,index)=>({id:item.id,src:`/api/assets/${item.id}`,name:assets[index].original_name,locked:item.locked,observation:analysis.observations.find(o=>o.ingredientIndex===index+1)?.observed}));
+  const ingredients = input.ingredients.map((item,index)=>({id:item.id,src:`/api/assets/${item.id}`,name:assets[index].original_name,bytes:assets[index].bytes,locked:item.locked,observation:analysis.observations.find(o=>o.ingredientIndex===index+1)?.observed}));
   const primary = ingredients.find(x=>x.locked) || ingredients[0];
   const reference = ingredients.find(x=>x!==primary) || primary;
   return { id:job.id,jobId:job.id,version:1,name:input.brief.name || analysis.proposedName,words:input.brief.words || analysis.concept.summary,concept:analysis.concept,mood:analysis.mood,palette:analysis.palette,paper:analysis.paper,ink:analysis.ink,keywords:analysis.keywords,audience:analysis.audience,promise:analysis.promise,observations:analysis.observations,image:primary.src,productImage:primary.src,referenceImage:reference.src,referenceColor:analysis.palette[0],generatedImage:`/api/assets/${imageId}`,ingredients,locked:ingredients.some(x=>x.locked),strength:64,format:'guideline',customization:normalizeCustomization({objectStyles:[{fresh:'bloom',bold:'orbit',luxe:'ribbon'}[analysis.mood]]}),createdAt:now(),ai:{textModel:models(env).text,imageModel:models(env).image,promptVersion:PROMPT_VERSION,generatedAt:now(),status:'generated',originalsPreserved:true} };

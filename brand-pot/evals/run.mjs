@@ -12,8 +12,8 @@ const mode = arg('mode') || 'smoke';
 const base = new URL(process.env.BASE_URL || 'http://127.0.0.1:8788');
 assert(['http:', 'https:'].includes(base.protocol), 'BASE_URL must be HTTP(S)');
 assert(base.protocol === 'https:' || ['localhost', '127.0.0.1', '[::1]'].includes(base.hostname), 'Use HTTPS for non-local evaluation');
-assert(['smoke', 'generate', 'cancel', 'limit'].includes(mode), 'mode is smoke, generate, cancel, or limit');
-if (mode !== 'smoke') assert.equal(process.env.RUN_PAID_EVAL, '1', 'Paid modes require RUN_PAID_EVAL=1; each accepted new job may incur OpenAI charges');
+assert(['smoke', 'generate', 'cancel', 'limit', 'trash'].includes(mode), 'mode is smoke, generate, cancel, limit, or trash');
+if (['generate','cancel','limit'].includes(mode)) assert.equal(process.env.RUN_PAID_EVAL, '1', 'Paid modes require RUN_PAID_EVAL=1; each accepted new job may incur OpenAI charges');
 const cases = JSON.parse(await readFile(path.join(root, 'evals/cases.json'), 'utf8'));
 const chosen = cases.find(item => item.id === (arg('case') || 'thai_beverage'));
 assert(chosen, 'Unknown --case');
@@ -65,7 +65,50 @@ async function poll(id) {
   }
   throw new Error(`Job ${id} did not reach a terminal state within ${timeoutMs} ms; it may still be running`);
 }
+async function checkRecipeTrash(savedRecipe) {
+  const id=savedRecipe.id;
+  const before=JSON.stringify({...savedRecipe,trashedAt:null});
+  let needsRestore=false;
+  try {
+    for(const [method,route] of [['DELETE',`/api/recipes/${id}`],['POST',`/api/recipes/${id}/restore`]]) {
+      const denied=await stranger.call(route,{method,...(method==='POST'?{body:{}}:{})}); expectStatus(denied,[404],'cross-owner trash mutation');
+    }
+    record('cross-owner delete and restore blocked');
+    const deleted=await owner.call(`/api/recipes/${id}`,{method:'DELETE'}); expectStatus(deleted,[200],'move recipe to trash'); needsRestore=true;
+    const repeated=await owner.call(`/api/recipes/${id}`,{method:'DELETE'}); expectStatus(repeated,[200],'repeat delete');
+    const active=await owner.call('/api/recipes'),trash=await owner.call('/api/recipes?trash=1'),privateTrash=await stranger.call('/api/recipes?trash=1');
+    [active,trash,privateTrash].forEach(response=>expectStatus(response,[200],'recipe list after trash'));
+    assert(!active.data.recipes.some(item=>item.id===id),'Trashed recipe leaves active list');
+    assert(trash.data.recipes.some(item=>item.id===id && item.trashedAt),'Owner can see recoverable trash');
+    assert(!privateTrash.data.recipes.some(item=>item.id===id),'Another session cannot see trash');
+    record('trash is private reversible and idempotent');
+    const session=await owner.call('/api/session'); expectStatus(session,[200],'session after trash');
+    assert(session.data.latestRecipe?.id!==id,'Trashed saved recipe does not reopen');
+    const anotherSavedVersion=active.data.recipes.some(item=>item.jobId===savedRecipe.jobId);
+    assert(anotherSavedVersion || session.data.latestRecipe?.id!==savedRecipe.jobId,'Trashed recipe does not reappear as generated fallback');
+    record('reload does not resurrect deleted recipe');
+    const restored=await owner.call(`/api/recipes/${id}/restore`,{method:'POST',body:{}}); expectStatus(restored,[200],'restore recipe'); needsRestore=false;
+    const repeatRestore=await owner.call(`/api/recipes/${id}/restore`,{method:'POST',body:{}}); expectStatus(repeatRestore,[200],'repeat restore');
+    const after=await owner.call('/api/recipes'); expectStatus(after,[200],'active recipe after restore');
+    const restoredRecipe=after.data.recipes.find(item=>item.id===id); assert(restoredRecipe && !restoredRecipe.trashedAt,'Restored recipe returns to active list');
+    assert(JSON.stringify({...restoredRecipe,trashedAt:null})===before,'Restoring preserves the exact saved recipe and assets');
+    record('restore preserves saved content and assets');
+  } finally {
+    if(needsRestore){const cleanup=await owner.call(`/api/recipes/${id}/restore`,{method:'POST',body:{}});expectStatus(cleanup,[200],'restore evaluation recipe after failure');}
+  }
+}
+async function existingRecipeTrash() {
+  assert(process.env.BASE_URL,'Trash mode requires an explicit BASE_URL');
+  assert(/^(?:__Host-)?slaply_session=[a-f0-9]{64}$/.test(process.env.EVAL_SESSION_COOKIE||''),'Trash mode needs EVAL_SESSION_COOKIE for an existing disposable test recipe; never put it in arguments or reports');
+  assert(/^[0-9a-f-]{36}$/i.test(process.env.EVAL_RECIPE_ID||''),'Trash mode needs EVAL_RECIPE_ID for an existing saved test recipe');
+  owner.cookie=process.env.EVAL_SESSION_COOKIE;
+  const current=await owner.call('/api/recipes');expectStatus(current,[200],'existing owner session');
+  const recipe=current.data.recipes?.find(item=>item.id===process.env.EVAL_RECIPE_ID);assert(recipe && !recipe.trashedAt,'Test recipe must initially be active and owned by supplied session');
+  const other=await stranger.call('/api/session');expectStatus(other,[200],'independent test session');
+  await checkRecipeTrash(recipe);
+}
 async function main() {
+  if(mode==='trash')return existingRecipeTrash();
   const [homepage, ...sessions] = await Promise.all([owner.call('/',{raw:true}),owner.call('/api/session'), stranger.call('/api/session')]);
   expectStatus(homepage,[200],'homepage'); assert(/text\/html/i.test(homepage.headers.get('content-type')||''),'Homepage returns HTML'); assert(/Slaply/i.test(new TextDecoder().decode(homepage.data)),'Homepage identifies Slaply'); record('Brand Pot homepage serves');
   sessions.forEach(res => expectStatus(res,[200],'session')); assert(owner.cookie && stranger.cookie && owner.cookie !== stranger.cookie, 'Separate clients receive separate sessions');
@@ -73,7 +116,7 @@ async function main() {
   assert(/HttpOnly/i.test(cookieHeader) && /SameSite=/i.test(cookieHeader), 'Cookie must be HttpOnly with SameSite');
   if (base.protocol === 'https:') assert(/Secure/i.test(cookieHeader), 'Production cookie must be Secure');
   record('isolated sessions and cookie security');
-  const originalCookie=owner.cookie; const repeatSession=await owner.call('/api/session'); expectStatus(repeatSession,[200],'repeat session'); assert.equal(owner.cookie,originalCookie,'Existing cookie remains stable');
+  const originalCookie=owner.cookie; const repeatSession=await owner.call('/api/session'); expectStatus(repeatSession,[200],'repeat session'); assert(owner.cookie===originalCookie,'Existing cookie remains stable');
   for(const snapshot of [sessions[0].data,repeatSession.data]){assert(Number.isInteger(snapshot.remaining)&&snapshot.remaining>=0&&snapshot.remaining<=snapshot.limit,'Session quota is bounded');assert(Number.isInteger(snapshot.globalRemaining)&&snapshot.globalRemaining>=0&&snapshot.remaining<=snapshot.globalRemaining,'Remaining reflects global cap');} record('existing session and bounded quota survive reload');
   const rejection = await owner.call('/api/jobs', {method:'POST', body:{}, headers:{Origin:'https://untrusted.invalid'}});
   expectStatus(rejection,[403],'cross-origin mutation'); record('cross-origin mutation blocked');
@@ -116,6 +159,7 @@ async function main() {
   const savedId=saved.data.recipe?.id; assert(savedId,'Save returns a versioned recipe');
   const list = await owner.call('/api/recipes'); expectStatus(list,[200],'reload recipe'); assert(Array.isArray(list.data.recipes) && list.data.recipes.some(item=>item.id===savedId),'Saved recipe reloads');
   const privateList = await stranger.call('/api/recipes'); expectStatus(privateList,[200],'private recipe list'); assert(!privateList.data.recipes.some(item=>item.id===savedId),'Stranger cannot list recipe'); record('saved recipe persists and stays private');
+  await checkRecipeTrash(saved.data.recipe);
   results.push({name:'human visual review',passed:null,checks:chosen.humanChecks,jobId:id});
 }
 let failure;

@@ -41,3 +41,17 @@
 .connection-alert{margin:12px auto;max-width:1000px;padding:14px 20px;display:flex;gap:16px;justify-content:center;align-items:center;background:#fff0dc;border:1px solid #c57a38;border-radius:16px;color:#713e1e;font-size:14px}.connection-alert button{border:0;background:#713e1e;color:#fff;padding:8px 14px;border-radius:10px;cursor:pointer}.credit-pill span{font-size:11px;white-space:nowrap}.cooking-status{max-width:600px;margin-inline:auto;text-align:center;white-space:normal;overflow-wrap:anywhere}.keep-button:disabled{opacity:.6}
 
 .ingredient-limits{font-size:10px;opacity:.65;margin:6px 0 8px;text-align:center}.concept-editor{padding:0 0 16px;margin-bottom:16px;border-bottom:1px solid var(--line,#ddd)}.concept-editor summary{cursor:pointer;font-size:12px;font-weight:600}.concept-editor label{display:block;font-size:10px;margin:12px 0 0}.concept-editor input,.concept-editor textarea{display:block;box-sizing:border-box;width:100%;margin-top:5px;font:inherit;font-size:12px;line-height:1.6;border:1px solid var(--line,#ccc);border-radius:8px;padding:8px;background:var(--paper,#fff9ee);color:inherit;resize:vertical}.concept-editor textarea{min-height:90px}
+
+/* Scoped annotation refinements: keep notes and artwork in their existing positions. */
+.pot-name-note .note-arrow{translate:-34px 0}
+.is-cooking .pot-assembly{animation:pot-rattle .48s steps(1,end) infinite;transform-origin:50% 82%}
+@keyframes pot-rattle{
+  0%,48%,100%{transform:translate(0,0) rotate(0)}
+  8%,27%{transform:translate(-1px,-.4px) rotate(-.24deg)}
+  16%,36%{transform:translate(1px,0) rotate(.24deg)}
+  65%{transform:translate(-.7px,0) rotate(-.16deg)}
+  73%{transform:translate(.7px,-.3px) rotate(.16deg)}
+  82%{transform:translate(0,0) rotate(0)}
+}
+.customize-controls input[type=range]{accent-color:var(--brand-control-color,var(--accent))}
+@media(prefers-reduced-motion:reduce){.is-cooking .pot-assembly{animation:none}}

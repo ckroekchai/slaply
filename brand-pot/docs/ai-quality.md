@@ -2,6 +2,12 @@
 
 The Brand Pot is deployed as an **AI Beta** on `https://slaply.co`. A real Thai beverage generation has passed the automated API flow, including a generated image, exact supplied brand name, idempotent replay, save/reload, and owner isolation. This establishes a working integration for that case; it does not establish stable design quality across products. Payment integration remains deferred.
 
+## Input and interaction limits
+
+The requested input contract for the annotation revision is two to six JPG/PNG/WebP images, at most **5 MiB per image and 18 MiB combined**, with up to 40 million pixels per image. The aggregate limit must be checked before AI quota admission; originals remain immutable. Recipe deletion must use private recoverable trash and must not delete original images, generated assets, or the source job. A saved indicator must reflect the current content matching a server-confirmed saved version, including after edits made while saving.
+
+The bill screen is a work/download summary during AI Beta; it must not submit a payment, buy credits, or imply a settled financial transaction. Animation checks include an observable cooking/pouring state plus a reduced-motion alternative. Slider colors must follow the requested styling while live artwork and exports keep the same color values.
+
 ## What this evaluation checks
 
 `evals/run.mjs` uses the same public API as the browser. It never reads provider keys, prints session cookies, or sends a cookie to another origin. The default mode creates two isolated sessions and uploads existing, explicitly named demo assets; it does not submit a valid AI job. Test uploads remain in the target account's private storage. Use preview for evaluation where possible. The preview passes the no-generation API smoke, but its existing OpenAI credential currently fails provider authentication. Production has a working credential, demonstrated by the successful generation report. A configured-secret health flag alone does not prove provider access; repair the preview credential before relying on preview generation tests.
@@ -39,6 +45,12 @@ This submits one unique job. Replaying the same idempotency key must return that
 
 For cancellation, use the same opt-in with `--mode cancel`. Cancellation prevents publication; a request already sent to the provider may still consume usage. For the admission limit test, use a **dedicated preview** with `DAILY_SESSION_LIMIT=1`, opt in with both `RUN_PAID_EVAL=1 EVAL_LIMIT_TEST=1`, and pass `--mode limit`. The script refuses this test under normal quotas and accepts at most one new job.
 
+## Verify reversible recipe trash without another generation
+
+`--mode trash` submits no new AI jobs. It requires an existing active, disposable test recipe and its existing owner session: `BASE_URL`, `EVAL_RECIPE_ID`, and `EVAL_SESSION_COOKIE` must be supplied through the process environment. Never paste the cookie into shell arguments, command history, source code, or reports. If no QA session has been retained, verify the control in the already authenticated browser or use the backend integration tests; do not generate a paid job just to obtain a trash fixture.
+
+The mode checks other-session delete/restore denial, private trash listing, repeated deletion, suppression of deleted recipes on reload, and exact content restoration. It attempts restoration in a `finally` block if a check fails after deletion. A failed cleanup must be reported as unresolved, not described as restored. Generation mode now runs these same checks after its newly created test recipe is saved; older generation reports predate those added checks.
+
 ## Evidence required before removing the AI Beta label
 
 The proposed broader quality gate is three independent generations for each of the six cases, with model and prompt versions recorded by the backend. This gate has not been completed. Keep each job's structured recipe and provider usage record; do not invent a score when evidence is absent. A reviewer inspects the live result and downloaded PNG/HTML side by side at desktop and mobile widths.
@@ -59,10 +71,12 @@ Block release for a privacy failure, credential disclosure, corrupted original, 
 - Runner syntax check: passed. Paid-mode opt-in guard: verified to reject before any network request when `RUN_PAID_EVAL` is absent.
 - Preview API smoke: **passed 10 checks**, 2026-11-04, against `https://slaply-cloudflare-preview.c-kroekchai.workers.dev` (deployed version `87bacd9b-f9f0-4aa6-b576-65aa3027a512`). Evidence: `evals/results/preview-smoke.json`. No valid AI jobs were submitted.
 - Production generation: **passed 17 automated checks**, 2026-11-04, `thai_beverage`, against `https://slaply.co`. Evidence: `evals/results/production-generate-v2.json`; job `3bb8da58-042a-49c4-b51f-1aceae83f734`. The runner recorded 53.1 seconds for the whole evaluation (including API smoke, upload, generation, and saving), not model-only latency.
-- Final local verification: **51/51 tests passed; production build passed**. Evidence: `evals/results/local-verification-2026-11-04.json`. Tests include cancellation, atomic admission limits, stale-job recovery, output escaping, and live/export data consistency; these are local automated checks, not substitutes for live human review.
+- Pre-annotation local verification: **51/51 tests passed; production build passed**. Evidence: `evals/results/local-verification-2026-11-04.json`. Tests include cancellation, atomic admission limits, stale-job recovery, output escaping, and live/export data consistency; these are local automated checks, not substitutes for live human review.
 - Preview provider authentication: failed with the existing preview credential; production provider access succeeded. No key values are recorded here.
 - Live paid cancellation/admission-limit modes: not run by the evaluation author.
 - Human desktop/mobile/export review: deployment owner is performing it separately; the production API report deliberately leaves human review unset.
+- Annotation backend verification: **20/20 focused tests passed**, including exact 18 MiB aggregate admission and one-byte-over rejection before quota, 5 MiB per-image limit, private/idempotent trash and restore, preserved assets/jobs, no reload resurrection, and inactive payment endpoints. Evidence: `evals/results/annotation-backend-verification-2026-11-04.json`.
+- Annotation frontend/browser checks (saved/dirty indicator, cooking movement, slider colors, bill layout): implementation and visual verification in progress; earlier reports do not establish these newer behaviors.
 - Full six-case repeated quality gate: **not completed**. Food and skincare fixtures remain required; do not call the model trained, stabilized, or broadly validated.
 
 Saved evaluation reports belong in `evals/results/` only when created by actual runs. Do not commit provider keys, cookies, private customer inputs, or full environment files.
