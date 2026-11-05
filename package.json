@@ -9,7 +9,12 @@
     "test": "npm --prefix brand-pot test",
     "deploy:cloudflare": "npm --prefix brand-pot run deploy:preview",
     "deploy:cloudflare:production": "npm --prefix brand-pot run deploy:production",
-    "preview:cloudflare": "npm --prefix brand-pot run preview:worker"
+    "preview:cloudflare": "npm --prefix brand-pot run preview:worker",
+    "setup:converter": "npm --prefix brand-pot run setup:converter",
+    "build:converter": "npm --prefix brand-pot run build:converter",
+    "test:converter": "npm --prefix brand-pot run test:converter",
+    "check:converter": "npm --prefix brand-pot run check:converter",
+    "deploy:converter": "npm --prefix brand-pot run deploy:converter"
   },
   "dependencies": {},
   "devDependencies": {},

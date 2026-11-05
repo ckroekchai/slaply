@@ -1,5 +1,7 @@
+import { BRAND_OBJECT_IDS } from '../shared/brand-objects.mjs';
 export const GUIDELINE_SIZE = Object.freeze({ width: 1600, height: 1120 });
 export const DEFAULT_CUSTOMIZATION = Object.freeze({ textScale: 100, objectScale: 100, objectStyles: Object.freeze(['bloom']), objectStyle: 'bloom', hue: 0, brightness: 100, saturation: 100 });
+export const DEFAULT_BOARD_CUSTOMIZATION = Object.freeze({ ...DEFAULT_CUSTOMIZATION, layout: 'auto', fontPair: 'auto', density: 'auto', pattern: 'auto', logoBackdrop: 'auto', logoScale: 100 });
 export const BRAND_OBJECTS_ASSET = '/assets/brand-objects.png';
 export const BRAND_OBJECTS = Object.freeze([
   { id: 'bloom', label: 'Bloom', description: 'Soft, playful energy', position: 0, src: BRAND_OBJECTS_ASSET },
@@ -24,7 +26,7 @@ export function normalizeCustomization(value = {}) {
   value = value && typeof value === 'object' ? value : {};
   // An explicit list (including []) wins over the legacy single-family field.
   const selected = Array.isArray(value.objectStyles) ? value.objectStyles : [value.objectStyle || 'bloom'];
-  const objectStyles = BRAND_OBJECTS.filter(item => selected.includes(item.id)).map(item => item.id);
+  const objectStyles = [...BRAND_OBJECTS.map(item=>item.id),...BRAND_OBJECT_IDS].filter(id=>selected.includes(id));
   if (!Array.isArray(value.objectStyles) && !objectStyles.length) objectStyles.push('bloom');
   return {
     textScale: clamp(value.textScale, 75, 125, 100),
@@ -34,6 +36,8 @@ export function normalizeCustomization(value = {}) {
     hue: clamp(value.hue, -180, 180, 0),
     brightness: clamp(value.brightness, 50, 150, 100),
     saturation: clamp(value.saturation, 0, 180, 100),
+    ...Object.fromEntries(Object.entries({ layout: ['auto','editorial','expressive','minimal'], fontPair: ['auto','grotesk','editorial-serif','display'], density: ['auto','airy','balanced','compact'], pattern: ['auto','repeat','stripe','tile'], logoBackdrop: ['auto','light','dark'] }).filter(([key]) => key in value).map(([key, choices]) => [key, choices.includes(value[key]) ? value[key] : choices[0]])),
+    ...('logoScale' in value ? { logoScale: clamp(value.logoScale, 70, 115, 100) } : {}),
   };
 }
 function rgb(value, fallback = [200, 234, 213]) {
@@ -57,9 +61,16 @@ export function adjustBrandColor(value, settings = DEFAULT_CUSTOMIZATION) {
   return hexFromRGB(rgbFromHSL((h+c.hue+360)%360,Math.min(1,s*c.saturation/100),l).map(v=>v*c.brightness/100));
 }
 function luminance(color) { const v=rgb(color).map(n=>{const c=n/255;return c<=.04045?c/12.92:((c+.055)/1.055)**2.4});return .2126*v[0]+.7152*v[1]+.0722*v[2]; }
-export function readableInk(background, preferred='#202442') { const bg=luminance(background),fg=luminance(preferred);if((Math.max(bg,fg)+.05)/(Math.min(bg,fg)+.05)>=4.5)return colorHex(preferred);return bg>.179?'#202442':'#FFF9EE'; }
+export function readableInk(background, preferred='#202442') {
+  const bg=luminance(background), contrast=color=>{const fg=luminance(color);return (Math.max(bg,fg)+.05)/(Math.min(bg,fg)+.05)};
+  if(contrast(preferred)>=4.5)return colorHex(preferred);
+  const candidates=['#202442','#FFF9EE'];
+  const passing=candidates.filter(color=>contrast(color)>=4.5).sort((a,b)=>contrast(b)-contrast(a));
+  if(passing.length)return passing[0];
+  return contrast('#000000')>=contrast('#FFFFFF')?'#000000':'#FFFFFF';
+}
 export function escapeGuidelineHTML(value) { return String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char])); }
-export function safeGuidelineImage(value) { const s=typeof value==='string'?value:'';return /^(?:\/assets\/[\w./-]+|\/api\/assets\/[a-z\d_-]+|data:image\/(?:png|jpe?g|webp|avif|gif|bmp);base64,[a-z\d+/=\s]+|blob:[^\s]+)$/i.test(s)?s:''; }
+export function safeGuidelineImage(value) { const s=typeof value==='string'?value:'';return /^(?:\/assets\/[\w./-]+|\/api\/assets\/[a-z\d_-]+(?:\/preview)?|data:image\/(?:png|jpe?g|webp|avif|gif|bmp);base64,[a-z\d+/=\s]+|blob:[^\s]+)$/i.test(s)?s:''; }
 function getKeywords(words, mood) {
   const parts=String(words||'').split(/[.,;!?·\n]+|\s{2,}/).map(s=>s.trim()).filter(Boolean);
   let wordsList=parts.length>=2?parts:String(words||'').split(/\s+/).filter(Boolean);
