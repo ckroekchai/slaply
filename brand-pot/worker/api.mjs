@@ -6,6 +6,7 @@ const JSON_HEADERS = { 'Content-Type':'application/json; charset=utf-8','Cache-C
 export function json(body, status=200, extra={}) { return new Response(JSON.stringify(body), {status,headers:{...JSON_HEADERS,...extra}}); }
 const notFound = () => new HttpError(404,'NOT_FOUND','ไม่พบรายการนี้ในเบราว์เซอร์ของคุณ');
 const db = env => env.SLAPLY_DB;
+const documentUploadsEnabled = env => env.ENABLE_DOCUMENT_UPLOADS === 'true' && typeof env.ASSET_CONVERTER?.fetch === 'function';
 const ipHash = request => hash(`brand-pot-ip:${request.headers.get('CF-Connecting-IP') || 'local'}`);
 async function readBytes(request, maximum) {
   if (Number(request.headers.get('Content-Length')) > maximum) throw new HttpError(413,'TOO_LARGE','ข้อมูลมีขนาดใหญ่เกินไป');
@@ -49,7 +50,7 @@ async function sessionInfo(request,env) {
   const latestRecipe=saved&&(!latestGenerated||saved.created_at>=latestGenerated.createdAt)?JSON.parse(saved.recipe_json):latestGenerated;
   const activeState=pendingJob?await getJob(env,current,pendingJob.id):null;
   const activeJob=activeState&&['queued','analyzing','generating'].includes(activeState.status)?{id:activeState.id,status:activeState.status,phase:activeState.phase}:null;
-  return json({...allowance,models:models(env),session:{createdAt:current.created_at,expiresAt:current.expires_at},activeJob:activeJob||null,latestRecipe},200,cookie?{'Set-Cookie':cookie}:{});
+  return json({...allowance,models:models(env),uploads:{documents:documentUploadsEnabled(env)},session:{createdAt:current.created_at,expiresAt:current.expires_at},activeJob:activeJob||null,latestRecipe},200,cookie?{'Set-Cookie':cookie}:{});
 }
 async function upload(request,env,current) {
   if(!request.headers.get('Content-Type')?.startsWith('multipart/form-data'))throw new HttpError(415,'INVALID_INPUT','กรุณาอัปโหลดไฟล์รูป');
@@ -57,7 +58,9 @@ async function upload(request,env,current) {
   try { form=await new Response(await readBytes(request,MAX_UPLOAD_BYTES+64*1024),{headers:{'Content-Type':request.headers.get('Content-Type')}}).formData(); } catch(error) { if(error instanceof HttpError)throw error;throw new HttpError(400,'INVALID_INPUT','เปิดไฟล์อัปโหลดไม่ได้'); }
   const file=form.get('file');
   if(!file || typeof file.arrayBuffer!=='function' || file.size<1 || file.size>MAX_UPLOAD_BYTES)throw new HttpError(400,'INVALID_INPUT','เลือกไฟล์ขนาดไม่เกิน 5 MB');
-  const bytes=new Uint8Array(await file.arrayBuffer()),image=identifyArtwork(bytes,file),mime=image.mime,digest=await hashBytes(bytes),id=crypto.randomUUID(),name=safeName(file.name),key=`brand-pot/originals/${current.id}/${id}`,ip=await ipHash(request),today=day();
+  const bytes=new Uint8Array(await file.arrayBuffer()),image=identifyArtwork(bytes,file);
+  if(image.vector&&!documentUploadsEnabled(env))throw new HttpError(400,'DOCUMENT_UPLOADS_DISABLED','ขณะนี้รองรับ JPG, PNG และ WebP กรุณาแปลงไฟล์ SVG/PDF เป็นรูปภาพก่อนอัปโหลด');
+  const mime=image.mime,digest=await hashBytes(bytes),id=crypto.randomUUID(),name=safeName(file.name),key=`brand-pot/originals/${current.id}/${id}`,ip=await ipHash(request),today=day();
   // One atomic INSERT guards upload volume even when clients upload concurrently.
   const inserted=await db(env).prepare(`INSERT INTO brand_assets (id,session_id,kind,r2_key,mime,bytes,original_name,state,ip_hash,day,created_at)
     SELECT ?,?,'original',?,?,?,?,'pending',?,?,?

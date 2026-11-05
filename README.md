@@ -1,6 +1,6 @@
 # Slaply — The Brand Pot
 
-Slaply turns two to six image ingredients and a short brief into an editable brand direction. The current application is **`brand-pot/`**, using the approved Brand Pot design. Payment is deliberately excluded while AI quality is being developed.
+Slaply turns one logo plus a brief, or two to six image ingredients, into an editable Brand Guideline Board. The current application is **`brand-pot/`**, using the approved Brand Pot design. Payment is deliberately excluded while AI quality is being developed.
 
 ## Run and verify
 
@@ -21,7 +21,9 @@ Use `brand-pot/node_modules/.bin/wrangler d1 migrations apply SLAPLY_DB --local 
 - Cloudflare Worker serves APIs and static assets on `slaply.co` and `www.slaply.co`.
 - Cloudflare Workflows performs durable vision analysis, illustration generation and publication.
 - D1 stores sessions, jobs, recipes, provider usage and errors. R2 preserves original uploads and generated assets separately.
-- OpenAI Responses API returns a validated brand recipe; Images API creates a text-free original illustration. Typography and original product images are rendered by the application.
+- GPT-6 Luna returns a validated brand system; GPT Image 2.6 Flare creates one separate decorative image at low quality/complexity. A controlled renderer composes original logos, typography, colors and applications across three layouts and three Thai/English font pairs.
+- Export a 2400 × 1800 sRGB PNG/PDF, offline HTML, or portable recipe JSON. Original image bytes remain unchanged.
+- This release stays on Workers Free and accepts JPG, PNG and WebP (5 MiB per file, 18 MiB total). SVG/PDF upload is disabled; its tested converter remains available for a later Paid-plan rollout.
 - Opaque HttpOnly session cookies scope private uploads and recipes to one browser. Download portable files for a personal backup; accounts and cross-device sync are not included in this beta.
 - Server admission limits default to 5 jobs per browser, 10 per IP and 40 total per Bangkok calendar day. Accepted attempts, including cancelled/failed requests, consume admission budget because upstream work can already have started. These are operating caps, not billing credits.
 
@@ -34,7 +36,7 @@ npm run deploy:cloudflare:production  # existing production Worker and domains
 
 Apply additive D1 migrations to the intended environment before deploying. Existing encrypted Worker secrets are retained. `OPENAI_API_KEY` stays server-side. The `brand-pot/wrangler.jsonc` file is the canonical deployment configuration; root config mirrors it for direct Wrangler use.
 
-Model names, quotas and prompt version are explicit. See [AI quality and evaluation](brand-pot/docs/ai-quality.md) for the acceptance matrix and opt-in real API test runner, and [operations](brand-pot/docs/operations.md) for rollout/rollback and limits.
+See [Brand Guideline v6](brand-pot/docs/brand-board-v6.md) for the current architecture, provider cost evidence, export validation and deferred SVG/PDF support. Model names, quotas and prompt version are explicit. See [AI quality and evaluation](brand-pot/docs/ai-quality.md) for the acceptance matrix and opt-in real API test runner, and [operations](brand-pot/docs/operations.md) for rollout/rollback and limits.
 
 ## Prior audit product
 

@@ -14,7 +14,7 @@ import {BOARD_TEMPLATES,BOARD_FONT_PAIRS,buildBrandBoardScene} from './brand-boa
 import {inspectLogoSource} from './logo-backdrop.js';
 import {INGREDIENT_ROLES,canCookIngredients,assignIngredientRole,uploadIngredientRole} from './ingredient-roles.js';
 import {uploadIngredient} from './upload-ingredient.js';
-import {uploadValidationMessage,UPLOAD_ACCEPT} from './upload-limits.js';
+import {uploadValidationMessage,uploadAccept} from './upload-limits.js';
 const INGREDIENT_ICONS=[{Icon:Carrot,name:'แครอท'},{Icon:Egg,name:'ไข่'},{Icon:Pepper,name:'พริก'},{Icon:Jar,name:'น้ำผึ้ง'},{Icon:Leaf,name:'สมุนไพร'},{Icon:OrangeSlice,name:'ซิตรัส'}];
 const A='/assets/';
 const MOODS=[
@@ -43,6 +43,7 @@ export function App(){
  const [pour,setPour]=useState(null),[dragging,setDragging]=useState(false),[reading,setReading]=useState(false);
  const fileInput=useRef(null),carousel=useRef(null),cards=useRef([]),activeRef=useRef(0),fileSlot=useRef(0),fileVersions=useRef(Array(6).fill(0)),readEpoch=useRef(0),pendingReads=useRef(new Set());
  const scrollTimer=useRef(null),toastTimer=useRef(null),pourTimer=useRef(null),skipNext=useRef(false),lastStarted=useRef({ingredients:null,shake:-1}),mixNumber=useRef(0),callbacks=useRef({}),runner=useRef(null),scrollLock=useRef(0);
+ const allowDocuments=session?.uploads?.documents===true;
  const count=ingredients.filter(Boolean).length,busy=job.phase==='cooking'||job.phase==='pouring',theme=themeMode==='auto'?timeTheme:themeMode;
  const isBoard=Number(result?.schemaVersion)>=6,canCook=canCookIngredients(ingredients,brief),hasLogo=ingredients.some(item=>item?.role==='logo');
  const inputLogo=ingredients.find(item=>item?.role==='logo');
@@ -93,9 +94,9 @@ export function App(){
  function pourInto(index,item){setActive(index);setIngredients(old=>old.map((x,i)=>i===index?{...item,role:uploadIngredientRole(old,index),locked:emphasisRef.current[index]}:x));setPour({id:Date.now(),index,src:item.src});clearTimeout(pourTimer.current);pourTimer.current=setTimeout(()=>setPour(null),1300)}
  function requestUpload(index){if(!session){notify('กำลังเชื่อมต่อ Slaply กรุณารอสักครู่');return}fileSlot.current=index;setActive(index);fileInput.current.value='';fileInput.current.click()}
  async function upload(file,index){
-   if(!file)return;if(!session){notify('เชื่อมต่อ Slaply ก่อนอัปโหลด');return}const validationMessage=uploadValidationMessage(file,ingredients,index);if(validationMessage){notify(validationMessage);return}
+   if(!file)return;if(!session){notify('เชื่อมต่อ Slaply ก่อนอัปโหลด');return}const validationMessage=uploadValidationMessage(file,ingredients,index,{allowDocuments});if(validationMessage){notify(validationMessage);return}
    restoringJob.current=false;runner.current.cancel();lastStarted.current={ingredients:null,shake:-1};const epoch=readEpoch.current;const version=++fileVersions.current[index];const readId=Symbol();pendingReads.current.add(readId);setReading(true);
-   try{const item=await uploadIngredient(file,{isCurrent:()=>epoch===readEpoch.current&&version===fileVersions.current[index]});
+   try{const item=await uploadIngredient(file,{allowDocuments,isCurrent:()=>epoch===readEpoch.current&&version===fileVersions.current[index]});
      if(item&&epoch===readEpoch.current&&version===fileVersions.current[index])pourInto(index,item);
    }catch(error){notify(error.message||'อัปโหลดรูปนี้ไม่ได้ ลองใหม่อีกครั้ง')}finally{pendingReads.current.delete(readId);setReading(pendingReads.current.size>0)}
  }
@@ -133,8 +134,8 @@ export function App(){
  {connectionError&&<div className="connection-alert" role="alert"><span>{connectionError}</span><button onClick={()=>session?refreshSession().catch(()=>{}):setBootstrapAttempt(value=>value+1)}>เชื่อมต่ออีกครั้ง</button></div>}
  <section className="kitchen-hero"><div className="hero-copy"><span className="eyebrow">A LITTLE MIX. A LOT OF YOU.</span><h1>Good brands start<br className="mobile-break"/> with <span>good ingredients.</span></h1><p>ใส่โลโก้กับไอเดีย หรือผสมภาพ 2–6 อย่าง ให้เราปรุงแบรนด์ที่เป็นคุณ</p></div>
  <section className="ingredient-zone" aria-label="วัตถุดิบแบรนด์ สูงสุด 6 อย่าง"><div className="ingredient-heading"><span>วัตถุดิบของคุณ</span><span className={canCook?'count ready':'count'}><b>{count}</b> / 6</span></div>
- <p className="ingredient-limits">JPG / PNG / WebP / SVG / PDF · ไม่เกิน 5 MB ต่อไฟล์ และ 18 MB รวม · ภาพจะถูกส่งให้ AI</p>
- <p className="ingredient-role-help">SVG แบบภาพนิ่งที่แปลงตัวอักษรเป็นเส้นแล้ว · PDF 1 หน้า</p>
+ <p className="ingredient-limits">{allowDocuments?'JPG / PNG / WebP / SVG / PDF':'JPG / PNG / WebP'} · ไม่เกิน 5 MB ต่อไฟล์ และ 18 MB รวม · ภาพจะถูกส่งให้ AI</p>
+ {allowDocuments&&<p className="ingredient-role-help">SVG แบบภาพนิ่งที่แปลงตัวอักษรเป็นเส้นแล้ว · PDF 1 หน้า</p>}
  <div className="carousel-shell"><button className="slide-arrow prev" disabled={active===0} aria-label="Previous ingredient" onClick={()=>select(active-1)}><CaretLeft size={21}/></button><div className="ingredient-carousel" ref={carousel} onScroll={onScroll} aria-label="เลือกวัตถุดิบ" onKeyDown={e=>{if(e.key==='ArrowRight'){e.preventDefault();select(active+1,true)}if(e.key==='ArrowLeft'){e.preventDefault();select(active-1,true)}}}>
  {ingredients.map((item,i)=><div className={`ingredient-slot ${active===i?'active':''} ${item?'filled':''} ${emphasis[i]?'emphasized':''} ${pour?.index===i?'is-pouring':''}`} key={i} ref={el=>cards.current[i]=el}>
  <button className="ingredient-card" aria-label={`${item?'Change':'Upload'} ingredient ${i+1}${item?' '+item.name:''}`} aria-current={active===i?'true':undefined} onClick={()=>active===i?requestUpload(i):select(i)} onDragOver={e=>{e.preventDefault();setActive(i)}} onDrop={e=>{e.preventDefault();upload(e.dataTransfer.files[0],i)}}><span className="slot-number">0{i+1}</span>{item?<><img src={asset(item.src)} alt={item.name}/><span className="filled-label"><Check size={12}/> ลงหม้อแล้ว</span></>:<><IngredientIcon index={i}/><b>{i===0?'โลโก้ของคุณ':i===1?'แรงบันดาลใจ':'ปรุงรส'}</b><span>กดเพื่ออัปโหลด</span></>}</button>
@@ -146,7 +147,7 @@ export function App(){
  <div className="carousel-guide"><div className="slot-dots">{ingredients.map((it,i)=><button key={i} className={`${active===i?'active':''} ${it?'filled':''}`} onClick={()=>select(i)} aria-label={`Select ingredient ${i+1}`} aria-pressed={active===i}/>)}</div></div>
  <p className="ingredient-role-help">เลือกภาพโลโก้ 1 ภาพ แล้วเติมคำบรรยายข้างหม้อ · โลโก้ต้นฉบับจะไม่ถูกวาดใหม่</p>
  {logoQuality?.source===inputLogo?.src&&logoQuality?.warning&&<p className="logo-quality-hint" role="status"><Info size={15}/><span>{logoQuality.warning}</span></p>}
- <input ref={fileInput} type="file" hidden accept={UPLOAD_ACCEPT} aria-label="Ingredient image file" onChange={e=>upload(e.target.files[0],fileSlot.current)}/>
+ <input ref={fileInput} type="file" hidden accept={uploadAccept({allowDocuments})} aria-label="Ingredient image file" onChange={e=>upload(e.target.files[0],fileSlot.current)}/>
  </section>
  <section className={`cooking-station ${busy?'is-cooking':''} ${pour?'is-pouring':''} ${dragging?'drop-ready':''}`} aria-label="หม้อสร้างแบรนด์" onDragOver={e=>{e.preventDefault();setDragging(true)}} onDragLeave={()=>setDragging(false)} onDrop={e=>{e.preventDefault();setDragging(false);const slot=ingredients[active]?ingredients.findIndex(x=>!x):active;if(slot>=0)upload(e.dataTransfer.files[0],slot);else notify('ครบ 6 วัตถุดิบแล้ว · ลบหรือเปลี่ยนส่วนผสมก่อน')}}>
  <div className="pot-stage"><aside className="pot-note pot-name-note"><label htmlFor="brand-name"><span>ชื่อแบรนด์</span><input id="brand-name" value={brief.name} maxLength={80} placeholder="ชื่อแบรนด์ชื่อสินค้า" onChange={e=>updateBrief('name',e.target.value)}/></label><ArrowRight className="note-arrow" size={26} weight="light" aria-hidden="true"/></aside><aside className="pot-note pot-message-note"><label htmlFor="brand-seasoning"><span>เติมรสชาติด้วยข้อความ</span><textarea id="brand-seasoning" value={brief.words} maxLength={600} placeholder="บรรยายความรู้สึกลงไป" rows={3} onChange={e=>updateBrief('words',e.target.value)}/></label></aside><div className="pot-assembly"><img className="pot-image" src={asset(A+'brand-pot.png')} alt="หม้อ Slaply สีคอรัล มองเห็นน้ำด้านบน"/><img className="pot-emblem" src={asset(A+'brand-pot-v3.png')} alt="" aria-hidden="true"/><PotLiquid busy={busy} reduced={reduced}/>{pour&&<div className="pour-trail" key={pour.id} aria-hidden="true"><img src={asset(pour.src)} alt=""/><Sparkle weight="fill"/><Sparkle weight="fill"/></div>}</div></div>

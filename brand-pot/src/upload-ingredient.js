@@ -1,5 +1,5 @@
 import { apiRequest } from './api.js';
-import { uploadFileKind } from './upload-limits.js';
+import { uploadFileKind, uploadValidationMessage, DOCUMENT_UPLOAD_DISABLED_MESSAGE } from './upload-limits.js';
 import { safeGuidelineImage } from './brand-guideline-model.js';
 
 export function rasterHeaderMime(bytes) {
@@ -20,9 +20,11 @@ function sampleImage(source) {
 }
 
 /** SVG/PDF originals are sent unchanged and are never decoded by the browser. */
-export async function uploadIngredient(file,{request=apiRequest,read=readRaster,sample=sampleImage,isCurrent=()=>true}={}) {
+export async function uploadIngredient(file,{request=apiRequest,read=readRaster,sample=sampleImage,isCurrent=()=>true,allowDocuments=false}={}) {
+  const validation=uploadValidationMessage(file,[],-1,{allowDocuments});if(validation)throw new Error(validation);
   const header=new Uint8Array(await file.slice(0,12).arrayBuffer());
   const rasterMime=rasterHeaderMime(header),localRaster=uploadFileKind(file)==='raster'&&Boolean(rasterMime);
+  if(!localRaster&&allowDocuments!==true)throw new Error(DOCUMENT_UPLOAD_DISABLED_MESSAGE);
   let rgb;
   if(localRaster){const source=await read(file,rasterMime);if(!isCurrent())return null;rgb=await sample(source);}
   if(!isCurrent())return null;

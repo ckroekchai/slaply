@@ -24,7 +24,8 @@
     "DAILY_GLOBAL_LIMIT": "40",
     "OPENAI_IMAGE_QUALITY": "low",
     "OPENAI_IMAGE_COMPLEXITY": "low",
-    "OPENAI_IMAGE_SIZE": "1024x1024"
+    "OPENAI_IMAGE_SIZE": "1024x1024",
+    "ENABLE_DOCUMENT_UPLOADS": "false"
   },
   "d1_databases": [
     {
@@ -65,7 +66,8 @@
         "DAILY_GLOBAL_LIMIT": "40",
         "OPENAI_IMAGE_QUALITY": "low",
         "OPENAI_IMAGE_COMPLEXITY": "low",
-        "OPENAI_IMAGE_SIZE": "1024x1024"
+        "OPENAI_IMAGE_SIZE": "1024x1024",
+        "ENABLE_DOCUMENT_UPLOADS": "false"
       },
       "d1_databases": [
         {
@@ -87,21 +89,7 @@
           "name": "slaply-brand-production",
           "class_name": "BrandGenerationWorkflow"
         }
-      ],
-      "services": [
-        {
-          "binding": "ASSET_CONVERTER",
-          "service": "slaply-asset-converter",
-          "entrypoint": "AssetConverter"
-        }
       ]
     }
-  },
-  "services": [
-    {
-      "binding": "ASSET_CONVERTER",
-      "service": "slaply-asset-converter",
-      "entrypoint": "AssetConverter"
-    }
-  ]
+  }
 }

@@ -10,6 +10,7 @@ async function uploadArtwork(ctx,cookie,bytes=svg,mime='image/svg+xml',name='โ
 }
 function converter(ctx,{fail=false,invalidHash=false,before}={}){
   let calls=0;
+  ctx.env.ENABLE_DOCUMENT_UPLOADS='true';
   ctx.env.ASSET_CONVERTER={async fetch(request){calls++;const bytes=new Uint8Array(await request.arrayBuffer()),digest=await hashBytes(bytes),mime=request.headers.get('Content-Type');
     assert.equal(request.url,'https://converter.internal/convert');assert.equal(request.headers.get('X-Source-SHA256'),digest);assert.equal(request.headers.get('X-Max-Edge'),'2048');
     const row=ctx.sql.prepare("SELECT * FROM brand_assets WHERE state='pending' ORDER BY created_at DESC LIMIT 1").get();assert.ok(row,'Upload quota is reserved before converter execution');assert.deepEqual(ctx.storage.get(row.r2_key).body,bytes,'Exact original is stored before conversion');await before?.(row,bytes);
@@ -19,6 +20,23 @@ function converter(ctx,{fail=false,invalidHash=false,before}={}){
   }};return {get calls(){return calls;}};
 }
 const jobBody=id=>({schemaVersion:6,idempotencyKey:crypto.randomUUID(),ingredients:[{id,role:'logo',locked:false}],brief:{name:'ทดสอบโลโก้',words:'แบรนด์ร่วมสมัย'}});
+
+test('document uploads are disabled by default and need both an explicit flag and converter binding',async()=>{
+  for(const scenario of ['default','flag-only','binding-only','false-with-binding','boolean-true']){
+    const ctx=environment(),cookie=await start(ctx);let conversions=0;
+    if(['flag-only','boolean-true'].includes(scenario))ctx.env.ENABLE_DOCUMENT_UPLOADS=scenario==='boolean-true'?true:'true';
+    if(['binding-only','false-with-binding','boolean-true'].includes(scenario))ctx.env.ASSET_CONVERTER={fetch(){conversions++;throw new Error('Disabled converter must never run');}};
+    if(scenario==='false-with-binding')ctx.env.ENABLE_DOCUMENT_UPLOADS='false';
+    const before=(await call(ctx,'/api/session',{cookie})).data;assert.deepEqual(before.uploads,{documents:false});
+    for(const [bytes,mime,name] of [[svg,'image/svg+xml','logo.svg'],[pdf,'application/pdf','logo.pdf']]){const result=await uploadArtwork(ctx,cookie,bytes,mime,name);assert.equal(result.status,400,scenario);assert.equal(result.data.error.code,'DOCUMENT_UPLOADS_DISABLED');assert.match(result.data.error.message,/JPG, PNG และ WebP/);}
+    assert.equal(ctx.sql.prepare('SELECT COUNT(*) AS n FROM brand_assets').get().n,0);assert.equal(ctx.storage.size,0);assert.equal(conversions,0);assert.equal((await call(ctx,'/api/session',{cookie})).data.remaining,before.remaining);
+  }
+  const enabled=environment(),cookie=await start(enabled);converter(enabled);assert.deepEqual((await call(enabled,'/api/session',{cookie})).data.uploads,{documents:true});
+});
+
+test('default raster uploads succeed while document capability remains false',async()=>{
+  const ctx=environment(),cookie=await start(ctx);assert.equal((await call(ctx,'/api/session',{cookie})).data.uploads.documents,false);const result=await uploadArtwork(ctx,cookie,png,'image/png','logo.png');assert.equal(result.status,201);assert.equal(result.data.mime,'image/png');assert.equal(ctx.storage.size,1);
+});
 
 test('vector uploads reserve quota then store unchanged source and verified PNG as distinct R2 objects',async()=>{
   for(const [bytes,mime,name] of [[svg,'image/svg+xml','โลโก้.svg'],[pdf,'application/pdf','logo.pdf']]){
