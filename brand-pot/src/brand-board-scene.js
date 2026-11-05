@@ -1,4 +1,5 @@
 import { LOGO_BACKDROPS } from './logo-backdrop.js';
+import { brandObjects } from './brand-objects.js';
 import { adjustBrandColor, normalizeCustomization, readableInk, safeGuidelineImage, escapeGuidelineHTML } from './brand-guideline-model.js';
 
 export const BOARD_SIZE = Object.freeze({ width: 2400, height: 1800 });
@@ -67,6 +68,11 @@ export function buildBrandBoardScene(recipe = {}, mood = {}, options = {}) {
   const label = (id, title, r, fill = colors.ink) => txt(id, title, rect(r.x + pad, r.y + 25, r.w - pad * 2, 27), 20, { fontFamily: 'Space Grotesk', fontWeight: 600, letterSpacing: 2.4, fill });
   const logoSource = safeGuidelineImage(recipe.logo?.src || recipe.ingredients?.find(item => item?.role === 'logo')?.src);
   const artSource = safeGuidelineImage(recipe.generatedImage);
+  const objects=brandObjects(recipe),selectedObjects=objects.filter(item=>c.objectStyles.includes(item.id));
+  const objectImage=(id,object,bounds,scale=1)=>{
+    const size=Math.min(bounds.w,bounds.h)*scale;
+    return image(id,object.src,rect(bounds.x+(bounds.w-size)/2,bounds.y+(bounds.h-size)/2,size,size),'brand-object',{sourceCrop:object.crop,objectId:object.id});
+  };
   const name = clean(recipe.name) || 'YOUR BRAND';
   // Source identity is server-owned and remains fixed when saved text is edited.
   const sourceName = clean(recipe.sourceName || recipe.brief?.name);
@@ -93,10 +99,22 @@ export function buildBrandBoardScene(recipe = {}, mood = {}, options = {}) {
   sourceLogo('identity-logo', scaledLogo);
   txt('logo-caption', logoSource ? 'โลโก้ต้นฉบับของคุณ' : clean(concept.title), rect(layout.logo.x+pad,layout.logo.y+layout.logo.h-55,layout.logo.w-pad*2,30), 20, { align:'center',fill:readableInk(logoBackdrop,colors.ink) });
 
-  // Full artwork and generated pattern stay in their own panels, never over logo.
-  box('artwork-panel',layout.artwork,colors.secondary);
-  label('artwork-label','VISUAL DIRECTION',layout.artwork,readableInk(colors.secondary,colors.ink));
-  if (artSource) image('artwork-main',artSource,inset(rect(layout.artwork.x,layout.artwork.y+65,layout.artwork.w,layout.artwork.h-110),24));
+  // The complete family is documented even when only a subset is selected for
+  // applications. Generated objects never replace or overlap the original logo.
+  box('artwork-panel',layout.artwork,objects.length?colors.paper:colors.secondary,{stroke:colors.ink,strokeOpacity:.12});
+  label('artwork-label',objects.length?'BRAND OBJECTS / 01—03':'VISUAL DIRECTION',layout.artwork,readableInk(objects.length?colors.paper:colors.secondary,colors.ink));
+  if(objects.length){
+    const area=inset(rect(layout.artwork.x,layout.artwork.y+80,layout.artwork.w,layout.artwork.h-108),24),vertical=templateId==='expressive';
+    objects.forEach((object,index)=>{
+      const cell=vertical?rect(area.x,area.y+index*area.h/3,area.w,area.h/3):rect(area.x+index*area.w/3,area.y,area.w/3,area.h);
+      const size=vertical?Math.min(cell.h-20,cell.w*.36):cell.w-16;
+      const picture=vertical?rect(cell.x,cell.y+8,size,size):rect(cell.x+8,cell.y+Math.max(0,(cell.h-size-150)/2),size,size);
+      objectImage(`brand-${object.id}`,object,picture);
+      const tx=vertical?cell.x+size+22:cell.x+8,ty=vertical?cell.y+32:picture.y+size+20,tw=vertical?cell.w-size-30:cell.w-16;
+      txt(`brand-${object.id}-name`,object.name,rect(tx,ty,tw,55),27,{fontFamily:pair.heading,fontFallback:pair.headingFallback,fontWeight:pair.headingWeight||600,minFontSize:17,fill:readableInk(colors.paper,colors.ink)});
+      txt(`brand-${object.id}-rationale`,object.rationale,rect(tx,ty+60,tw,vertical?cell.h-108:100),19,{minFontSize:13,fill:readableInk(colors.paper,colors.ink)});
+    });
+  }else if (artSource) image('artwork-main',artSource,inset(rect(layout.artwork.x,layout.artwork.y+65,layout.artwork.w,layout.artwork.h-110),24));
   else txt('artwork-direction',clean(recipe.words)||clean(concept.title),inset(layout.artwork,pad+20),68,{fontFamily:pair.heading,fontFallback:pair.headingFallback,fontWeight:pair.headingWeight||600,verticalAlign:'middle',fill:readableInk(colors.secondary,colors.ink)});
 
   box('concept-panel',layout.concept,templateId==='expressive'?colors.primary:colors.paper,{stroke:colors.ink,strokeOpacity:.15});
@@ -126,14 +144,17 @@ export function buildBrandBoardScene(recipe = {}, mood = {}, options = {}) {
 
   const pattern = (r,prefix='pattern') => {
     const content=inset(rect(r.x,r.y+65,r.w,r.h-85),24);
-    if(patternKind==='stripe'||!artSource){
+    if(patternKind==='stripe'||!artSource||(objects.length&&!selectedObjects.length)){
       const stripeColors=[colors.primary,colors.secondary,colors.accent,colors.paper,colors.ink];
       const count=templateId==='expressive'?7:5,w=content.w/count;
       for(let index=0;index<count;index++)box(`${prefix}-stripe-${index}`,rect(content.x+index*w,content.y,w,content.h),stripeColors[index%5],{radius:0});
     }else{
       const cols=patternKind==='tile'?3:2,rows=r.h>550?3:2,gap=patternKind==='tile'?12:24;
       const w=(content.w-gap*(cols-1))/cols,h=(content.h-gap*(rows-1))/rows;
-      for(let row=0;row<rows;row++)for(let col=0;col<cols;col++)image(`${prefix}-image-${row}-${col}`,artSource,rect(content.x+col*(w+gap),content.y+row*(h+gap),w,h));
+      for(let row=0;row<rows;row++)for(let col=0;col<cols;col++){
+        const bounds=rect(content.x+col*(w+gap),content.y+row*(h+gap),w,h),id=`${prefix}-image-${row}-${col}`;
+        if(selectedObjects.length)objectImage(id,selectedObjects[(row*cols+col)%selectedObjects.length],bounds,Math.min(1,c.objectScale/130));else image(id,artSource,bounds);
+      }
     }
   };
   box('pattern-panel',layout.pattern,colors.secondary);label('pattern-label','PATTERN & RHYTHM',layout.pattern,readableInk(colors.secondary,colors.ink));pattern(layout.pattern);
@@ -149,7 +170,9 @@ export function buildBrandBoardScene(recipe = {}, mood = {}, options = {}) {
       box('social-logo-backdrop',logoR,logoBackdrop,{radius:0});sourceLogo('social-logo',inset(logoR,10));
       txt('social-headline',renamedCopy(source.headline)||name,rect(left.x,left.y+110,left.w,inner.h-156),43,{fontFamily:pair.heading,fontFallback:pair.headingFallback,fontWeight:pair.headingWeight||600,lineHeight:1.2,minFontSize:24,fill:readableInk(colors.primary,colors.ink)});
       txt('social-body',renamedCopy(source.body)||recipe.keywords?.join(' · ')||'',rect(left.x,left.y+inner.h-40,inner.w,38),19,{fill:readableInk(colors.primary,colors.ink),minFontSize:14});
-      if(artSource)image('social-artwork',artSource,rect(inner.x+inner.w*.54,inner.y+12,inner.w*.46,inner.h-65));
+      const artBounds=rect(inner.x+inner.w*.54,inner.y+12,inner.w*.46,inner.h-65);
+      if(selectedObjects.length)objectImage('social-artwork',selectedObjects[0],artBounds,Math.min(1,c.objectScale/130));
+      else if(artSource&&!objects.length)image('social-artwork',artSource,artBounds);
     }else{
       const card=rect(inner.x+inner.w*.05,inner.y+4,inner.w*.9,inner.h-8);
       box('business-card-face',card,logoBackdrop,{radius:3});
@@ -162,7 +185,7 @@ export function buildBrandBoardScene(recipe = {}, mood = {}, options = {}) {
   app('social',layout.social);app('business-card',layout.card);
   txt('board-footer','MADE WITH SLAPLY',rect(64,1757,1200,25),16,{fontFamily:'Space Grotesk',letterSpacing:2,fill:readableInk(colors.paper,colors.ink)});
   txt('board-footer-type',`${templateId.toUpperCase()} / ${fontPairId.toUpperCase()}`,rect(1390,1757,946,25),16,{fontFamily:'Space Grotesk',align:'right',letterSpacing:1,fill:readableInk(colors.paper,colors.ink)});
-  return {version:6,size:BOARD_SIZE,templateId,fontPairId,density,patternKind,logoBackdrop:logoBackdropMode,name,colors,palette,layout,fontFamilies:[...new Set(['Space Grotesk',pair.heading,pair.body,pair.headingFallback])],assets:[...assets.values()],nodes};
+  return {version:6,size:BOARD_SIZE,templateId,fontPairId,density,patternKind,logoBackdrop:logoBackdropMode,name,colors,palette,layout,brandObjects:objects.map(({id,name,rationale,crop})=>({id,name,rationale,crop})),fontFamilies:[...new Set(['Space Grotesk',pair.heading,pair.body,pair.headingFallback])],assets:[...assets.values()],nodes};
 }
 
 const graphemes = text => typeof Intl.Segmenter==='function' ? [...new Intl.Segmenter('th',{granularity:'grapheme'}).segment(text)].map(x=>x.segment) : [...text];
@@ -215,7 +238,11 @@ export function renderBrandBoardSVG(input,{resolveAsset=src=>src,fontCSS='',meas
     if(node.type==='rect')return `<rect ${id} x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(node.radius||0)}" fill="${e(node.fill)}"${node.stroke?` stroke="${e(node.stroke)}" stroke-opacity="${node.strokeOpacity??1}"`:''}/>`;
     if(node.type==='line')return `<line ${id} x1="${n(b.x)}" y1="${n(b.y)}" x2="${n(b.x+b.w)}" y2="${n(b.y+b.h)}" stroke="${e(node.stroke)}" stroke-width="${node.strokeWidth||1}" opacity="${node.opacity??1}"/>`;
     if(node.type==='circle')return `<ellipse ${id} cx="${n(b.x+b.w/2)}" cy="${n(b.y+b.h/2)}" rx="${n(b.w/2)}" ry="${n(b.h/2)}" fill="${e(node.fill)}"/>`;
-    if(node.type==='image')return `<image ${id} data-source-role="${e(node.sourceRole)}" x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" href="${e(resolveAsset(node.assetRef))}" preserveAspectRatio="xMidYMid meet"${imageFilter(node)?` filter="url(#adjust-${e(node.id)})"`:''}/>`;
+    if(node.type==='image'){
+      const filter=imageFilter(node)?` filter="url(#adjust-${e(node.id)})"`:'';
+      if(node.sourceCrop&&!node.preserveOriginal){const crop=node.sourceCrop;return `<svg ${id} data-source-role="${e(node.sourceRole)}" x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" viewBox="${n(crop.x*1024)} ${n(crop.y*1024)} ${n(crop.w*1024)} ${n(crop.h*1024)}" overflow="hidden" preserveAspectRatio="xMidYMid meet"><image x="0" y="0" width="1024" height="1024" href="${e(resolveAsset(node.assetRef))}"${filter}/></svg>`;}
+      return `<image ${id} data-source-role="${e(node.sourceRole)}" x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" href="${e(resolveAsset(node.assetRef))}" preserveAspectRatio="xMidYMid meet"${filter}/>`;
+    }
     if(node.type==='text')return `<text ${id} font-family="${e(node.fontFamily)}, ${e(node.fontFallback||'sans-serif')}" font-weight="${node.fontWeight}" font-size="${n(node.computedFontSize||node.fontSize)}" fill="${e(node.fill)}" text-anchor="${node.align==='center'?'middle':node.align==='right'?'end':'start'}"${node.letterSpacing?` letter-spacing="${node.letterSpacing}"`:''}>${node.lines.map(line=>`<tspan x="${n(line.x)}" y="${n(line.y)}">${e(line.text)}</tspan>`).join('')}</text>`;
     return '';
   }).join('');

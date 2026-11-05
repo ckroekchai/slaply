@@ -3,6 +3,7 @@ import { asset } from './assets.js';
 import { buildGuidelineModel, renderGuidelineMarkup, renderGuidelineDetails, renderObjectSprite } from './brand-guideline-model.js';
 import { buildBrandBoardScene, layoutBrandBoardText, renderBrandBoardSVG, boardFontCSS, BOARD_FONT_CATALOG } from './brand-board-scene.js';
 import { inspectLogoSource } from './logo-backdrop.js';
+import { brandObjects } from './brand-objects.js';
 import './brand-guideline.css';
 import './brand-board.css';
 
@@ -50,4 +51,9 @@ export function GuidelineDetails({ recipe, mood }) {
 export function BrandObjectPreview({ style = 'bloom', className = '' }) {
   const markup = useMemo(() => renderObjectSprite(style, asset), [style]);
   return <span className={`guide-object-preview ${className}`} dangerouslySetInnerHTML={{ __html: markup }} />;
+}
+export function GeneratedObjectPicker({recipe,customization,onToggle}) {
+  const objects=brandObjects(recipe);
+  if(!objects.length)return null;
+  return <fieldset className="generated-object-picker"><legend>Brand objects · 3 แบบของคุณ</legend><p>เลือกใช้ในแพตเทิร์นและภาพตัวอย่าง</p><div>{objects.map(object=><button type="button" key={object.id} aria-label={`ใช้ ${object.name}`} aria-pressed={customization.objectStyles.includes(object.id)} className={customization.objectStyles.includes(object.id)?'selected':''} onClick={()=>onToggle(object.id)} title={object.rationale}><svg viewBox={`${object.crop.x*1024} ${object.crop.y*1024} 512 512`} role="img" aria-label={object.name}><image href={asset(object.src)} x="0" y="0" width="1024" height="1024"/></svg><span>{object.name}</span><small>{object.rationale}</small></button>)}</div></fieldset>;
 }

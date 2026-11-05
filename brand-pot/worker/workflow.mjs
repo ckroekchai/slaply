@@ -1,4 +1,5 @@
 import { WorkflowEntrypoint } from 'cloudflare:workers';
+import { Buffer } from 'node:buffer';
 import { HttpError, ANALYSIS_SCHEMA, PROMPT_VERSION, buildRecipe, validateAnalysis, analysisDiagnostics, now, day, providerError, inspectImage, hashBytes } from './core.mjs';
 import { modelPolicy, estimateUsageCost } from './model-policy.mjs';
 import { captureStageFailure, publicJobFailure } from './failures.mjs';
@@ -11,12 +12,27 @@ Return a brand system suited to this particular brief. Select design.template (e
 brandSystem.palette must contain exactly one each primary, secondary, accent, paper, ink with hex colors and short descriptive color names. Mirror primary/secondary/accent IN THAT ORDER in flat palette, and paper/ink in flat fields. Distinguish the first three colors; ink must read clearly on paper. The palette is proposed supporting design, not an extracted exact match to the logo unless the brief provides exact values. Do not modify the original logo colors.
 brandSystem.typography has short headingSample and bodySample using supplied or clearly proposed copy. brandSystem.pattern.kind is repeat/stripe/tile: the renderer creates the pattern from brand colors, not from a modified logo. brandSystem.applications has one social and one business-card example with headline/body. Each application headline and body must be ready-to-use customer-facing brand copy, addressed to the brand's audience, suitable to print directly on that application. Never put art direction, layout instructions, workflow descriptions, explanations of the mockup, or instructions to a designer in these fields (for example, "จัดวางโลโก้ต้นฉบับ", "ใช้สีหลัก", "ใส่ข้อความ", or "เว้นพื้นที่"). Concept title/summary may describe the design; application copy must communicate the brand itself. These are proposed copy suggestions, not real commercial claims: no invented addresses, phone numbers, prices, credentials or benefits. Prefer the exact brand name and supplied purpose; when context is missing use a neutral proposed invitation, not fabricated facts or placeholder contact details.
 Concept title <=80 characters, summary <=420; proposedName <=60, audience <=140, promise <=180; keywords 3 each <=26; each observation/inspiration <=240. Palette names <=40, typography heading <=80/body <=240, each application headline <=80/body <=240. Propose audience as a design intention when unspecified, not an observed customer fact.
-imagePrompt must be an English direction <=1800 characters for ONE new decorative brand artwork consistent with selected imageStyle and palette. It may be crisp graphic shapes, illustrated motifs, original abstract collage or tactile materials, as appropriate; do not default to 3D sculpture. No packaging, logo, reconstructed products, lettering, numbers, text, trademarks, people, watermark, UI or finished board. Original customer logo and products are composed separately without edits; never claim AI recreated them faithfully. The renderer creates layout and pattern deterministically. A Business intent: identity, useful communication, and clear proposed applications, without invented proof.`;
+brandSystem.objects must contain exactly three distinct original brand objects, ids object-1, object-2, object-3. Design their silhouettes and motifs specifically from the supplied brand identity, audience, offering and reference observations; do not reuse a fixed flower/ring/ribbon set for every brand. Give each a short Thai name (<=36 characters), a Thai rationale (<=180) tying its shape or material to THIS brand, an English visual description (<=360), and 1–3 palette roles from primary/secondary/accent. The three objects must have distinct silhouettes and roles but share one coherent visual language. A familiar literal motif is allowed only if appropriate to this brief; never reproduce customer logos or branded products.
+imagePrompt must be an English shared art direction <=1200 characters for this coordinated set of THREE isolated decorative brand objects consistent with selected imageStyle and palette. Individual object descriptions are supplied separately to the image model. It may be crisp graphic shapes, illustrated motifs, original abstract collage or tactile materials, as appropriate; do not default to 3D sculpture. No packaging, logo, reconstructed products, lettering, numbers, text, trademarks, people, watermark, UI or finished board. Original customer logo and products are composed separately without edits; never claim AI recreated them faithfully. The renderer creates layout and pattern deterministically. A Business intent: identity, useful communication, and clear proposed applications, without invented proof.`;
+
+export function brandObjectsImagePrompt(analysis) {
+  const positions=['TOP LEFT quadrant (x 0–511, y 0–511)','TOP RIGHT quadrant (x 512–1023, y 0–511)','BOTTOM LEFT quadrant (x 0–511, y 512–1023)'];
+  const objects=['object-1','object-2','object-3'].map((id,index)=>{
+    const object=analysis.brandSystem.objects.find(item=>item.id===id);
+    const colors=object.colors.map(role=>analysis.brandSystem.palette.find(color=>color.role===role).hex);
+    return `${positions[index]}: exactly ONE isolated object. ${object.visual}. Use colors ${colors.join(', ')}.`;
+  });
+  return `Create a precise 1024 × 1024 contact sheet containing exactly THREE distinct brand objects in a 2 × 2 equal square grid. This grid will be cut into 512 × 512 squares, so placement is mandatory.
+${objects.join('\n')}
+BOTTOM RIGHT quadrant: entirely empty flat background, no fourth object. Each of the three objects must be completely inside its own quadrant, centered and occupying about 65–70% of that quadrant; leave at least 70 pixels of plain background on every side of each object. No crossing the x=512 or y=512 boundaries. No connecting objects, decorative scatter, extra objects, frame, grid lines or dividers.
+Shared art direction: ${analysis.imagePrompt}
+Visual treatment: ${analysis.design.imageStyle}. Match this treatment consistently across all three; do not default to 3D sculpture. Entire background is flat solid ${analysis.paper}, same in every quadrant. Use the specified brand palette faithfully. No text, labels, numbers, letters, logos, trademarks, products, people, watermarks, UI or finished board. Preserve each original silhouette. Output only the three-object contact sheet.`;
+}
 
 function toBase64(bytes) {
-  let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(binary);
+  return Buffer.from(bytes.buffer,bytes.byteOffset,bytes.byteLength).toString('base64');
 }
-function fromBase64(value) { const binary=atob(value),bytes=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);return bytes; }
+function fromBase64(value) { return Buffer.from(value,'base64'); }
 async function getJob(env,id) { return env.SLAPLY_DB.prepare('SELECT * FROM brand_jobs WHERE id = ?').bind(id).first(); }
 async function alive(env,id) { const job=await getJob(env,id);return job&&['queued','analyzing','generating'].includes(job.status)?job:null; }
 async function phase(env,id,value) {
@@ -71,7 +87,7 @@ export async function runBrandGeneration(env,event,step,{fetch:fetcher=fetch}={}
           await recordUsage(env,id,'validation',{stage:'parse',outputLength:output.length,outputTextParts:parts.filter(part=>part.type==='output_text').length,responseStatus:response.status||null});
           throw new HttpError(502,'AI_INVALID_OUTPUT','AI ส่งแนวคิดไม่ครบ กรุณาลองใหม่');
         }
-        let validated;try{validated=validateAnalysis(parsed,assets.length,input.brief.name,6);}catch(error){
+        let validated;try{validated=validateAnalysis(parsed,assets.length,input.brief.name,6,true);}catch(error){
           await recordUsage(env,id,'validation',{stage:'schema',...analysisDiagnostics(parsed,assets.length,input.brief.name)});
           throw error;
         }
@@ -86,7 +102,7 @@ export async function runBrandGeneration(env,event,step,{fetch:fetcher=fetch}={}
         // A durable step can replay a pre-v6 result that has no design object.
         // Preserve its material treatment without repeating the paid vision step.
         const imageStyle=analysis.schemaVersion===6?analysis.design.imageStyle:'material';
-        const prompt=`Create one original standalone decorative brand artwork. This is a decorative visual asset, not packaging or a finished brand board.\n${analysis.imagePrompt}\nPalette: ${analysis.palette.join(', ')}. Coordinated plain background: ${analysis.paper}. Selected visual treatment: ${imageStyle}. Follow this visual treatment rather than defaulting to 3D sculpture. Produce the artwork only, not the board. No words, letters, numbers, logos, watermarks, existing trademarks, product containers, photos of products, people, UI or border. Avoid resembling an existing recognizable brand. The real uploaded products are preserved separately and must not be reconstructed here. Create only this new abstract visual.`;
+        const prompt=analysis.brandSystem?.objects?.length===3?brandObjectsImagePrompt(analysis):`Create one original standalone decorative brand artwork. This is a decorative visual asset, not packaging or a finished brand board.\n${analysis.imagePrompt}\nPalette: ${analysis.palette.join(', ')}. Coordinated plain background: ${analysis.paper}. Selected visual treatment: ${imageStyle}. Follow this visual treatment rather than defaulting to 3D sculpture. Produce the artwork only, not the board. No words, letters, numbers, logos, watermarks, existing trademarks, product containers, photos of products, people, UI or border. Avoid resembling an existing recognizable brand. The real uploaded products are preserved separately and must not be reconstructed here. Create only this new abstract visual.`;
         const response=await provider(env,id,'image','images/generations',{model:policy.image,prompt,n:policy.imageCount,size:policy.imageSize,quality:policy.imageQuality,complexity:policy.imageComplexity,output_format:'png'},360000,fetcher);
         const base64=response.data?.[0]?.b64_json;
         if(typeof base64!=='string'||!base64||base64.length>32*1024*1024)throw new HttpError(502,'AI_INVALID_IMAGE','AI ไม่ได้ส่งภาพที่ใช้งานได้ กรุณาลองใหม่');

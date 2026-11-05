@@ -6,8 +6,8 @@ Implementation and evaluation record, 2026-11-05. This work extends Brand Pot wh
 
 - Ingredient roles are `logo`, `product`, and `reference`. One logo plus a nonempty brief is sufficient; legacy multi-image requests still work. There is at most one logo.
 - Original objects retain their exact bytes, SHA-256, MIME type and dimensions. Priority locks do not select the logo.
-- AI produces bounded art direction: template, font pair, image style, density, five palette roles, type samples, pattern choice and two application examples. It cannot supply asset URLs, CSS or coordinates.
-- The shared 2400 × 1800 scene includes original logo, concept, visual direction, palette values, typography, pattern and two applications. Editorial, Expressive and Minimal use distinct geometry and actual local font pairs.
+- AI produces bounded art direction: template, font pair, image style, density, five palette roles, type samples, pattern choice, two application examples, and exactly three brand-specific object concepts with names, rationale, visual direction and palette roles. It cannot supply asset URLs, CSS or coordinates.
+- The shared 2400 × 1800 scene includes original logo, concept, all three generated objects, palette values, typography, pattern and two applications. Editorial, Expressive and Minimal use distinct geometry and actual local font pairs.
 - The browser and exports use the same scene and measured text. PNG, PDF and offline HTML include the full board. Original logo nodes always use contain, without cropping, recoloring, filters or generated replacements.
 - PNG is explicitly sRGB with 300 dpi physical metadata. PDF embeds the same RGB pixels losslessly and assigns an sRGB ICC profile, on one 576 × 432 point page. PDF is a raster board, not editable vector artwork or a CMYK production file.
 
@@ -21,7 +21,7 @@ Pricing references: [Luna](https://developers.openai.com/api/docs/models/gpt-6-l
 
 Private fixture manifests and client artwork live under ignored `qa/private/`. The public repository contains only generic verification scripts and synthetic test images. Source files are never modified.
 
-- Latest local verification passed **137 application tests and all 13 converter tests**, including the two optional private PDF corpus checks. Application tests cover admission, original integrity, role isolation, idempotency, cancellation, failures, provider output validation, rendering, export metadata, and frontend upload/decode order. Converter tests execute actual WASM inside workerd; they do not mock the renderer.
+- Latest local verification passed **144 application tests and all 13 converter tests**, including the two optional private PDF corpus checks. Application tests cover admission, original integrity, role isolation, idempotency, cancellation, failures, provider output validation, rendering, export metadata, and frontend upload/decode order. Converter tests execute actual WASM inside workerd; they do not mock the renderer.
 - The private render matrix uses three owner-provided brands across three templates, with Thai and English text and both transparent and opaque logos. All three final live-provider outputs and their complete boards have been reviewed.
 - Evaluation used **four paid generation runs**: the three original brand cases plus one EYEBSTYLE revision after customer-facing application copy was corrected in prompt version `brand-guideline-2026-11-05.2`. Their summed usage-based cost estimate is **US$0.10756449**. This is a measured evaluation estimate, not a billing reconciliation or a promise about future cost.
 - `evals/verify-board-artifacts.mjs` decodes actual PNG and PDF files. It checks dimensions, all five flat swatches, logo containment and original colors, exact embedded RGB bytes, and physical PDF page size. It reports cross-renderer edge sampling separately; it does not falsely label rasterized PDF bytes identical when a viewer interpolates edges.
@@ -47,15 +47,27 @@ CI builds locked converter dependencies, tests real workerd, and verifies both W
 - [x] Review all three final live-provider outputs and complete composed boards.
 - [x] Verify actual-browser exports across all three layouts and font pairs, distinguishing manual editor overrides from model selections.
 - [x] Complete local supported-input review for static raster images, outlined static SVG, and single-page PDF, including actual workerd conversion and private PDF checks.
-- [x] Pass 137 application tests, all 13 local converter tests, and both public GitHub CI jobs for the published draft source.
+- [x] Pass 144 application tests and all 13 local converter tests. Public CI is recorded on the release PR for each published revision.
 - [x] Apply preview migrations `0003_asset_metadata.sql` and `0004_asset_derivatives.sql`.
 - [x] Complete local real-browser mobile editing, saved reload, trash/restore and receipt PDF/JSON downloads.
 - [x] Apply the user's raster-only scope: no Paid subscription or converter deployment. Document uploads remain disabled.
-- [ ] Apply `0003_asset_metadata.sql` and `0004_asset_derivatives.sql` to production; neither production migration has been applied yet.
-- [ ] Complete release review, merge/deploy the application, and run production upload/save/reload/export smoke checks. No production release or converter deployment is claimed by the checks above.
+- [ ] Production rollout gate: apply additive `0003_asset_metadata.sql` and `0004_asset_derivatives.sql`; record observed completion on PR #1.
+- [ ] Production rollout gate: merge/deploy and run actual production upload/generate/edit/save/reload/export checks; record deployed version and results on PR #1. The checks above describe pre-release evidence, not production verification.
 
 Static image validation currently checks container structure, CRC/markers and dimension limits. It is not a full server-side pixel decoder. Creative quality is reviewed against fixture briefs and cannot be guaranteed universally by a finite passing test suite.
 
 ### Local complete-App verification
 
 The built application served from loopback used the final reviewed Cafe Claire result, with providers disabled and all external fetches forbidden. After editing the concept, selecting Minimal/Display and automatic logo backdrop, saving and reloading retained every value and the confirmed saved state. Trash and restore returned the recipe to its active list. Receipt downloads produced a one-page 576 × 432 pt PDF and a portable JSON whose original-logo bytes matched the source SHA-256. The 390 px page did not overflow; detail mode scrolled only its 1200 px board within a 358 px panel. No new job or provider call occurred. Screenshots and safe status reports are in ignored `qa/private/browser/`.
+
+### Three brand objects (prompt version 2026-11-05.3)
+
+The object family is retained as a required part of every new result. AI proposes three distinct silhouettes tied to the customer's brief and visual identity, with individual names, rationale and supporting palette roles. One low-quality 1024 × 1024 generation places them into three fixed 512 × 512 cells of a 2 × 2 sheet; the last cell stays empty. The app owns the crop coordinates. New AI output missing any object is rejected before the paid image call. Older saved recipes remain readable.
+
+All three objects remain documented in the board. Users select which objects appear in patterns and the social example, resize them without another provider call, save/reload these choices, and download each original 512 × 512 object PNG. The receipt also includes the complete sheet. Portable JSON embeds the image and three object definitions; PNG, PDF and HTML use the same scene. Object crops never apply to the original customer logo.
+
+Three additional live evaluations completed successfully: Cafe Claire (butter curl, baked layers, coffee seed), EYEBSTYLE (continuous curve, oval frame, paired ribbon), and TK (scent curve, petal form, scent strip). Their usage-based estimates were US$0.02864505, US$0.02864605 and US$0.02859813, totaling US$0.08588923. These are proposed visual interpretations of supplied briefs, not claims about brand performance. Across the seven pre-release paid evaluations the estimate is US$0.19345372.
+
+Actual Chrome review and six byte-level artifact checks per brand passed with the new object family: Cafe Claire Editorial/Editorial Serif, EYEBSTYLE manually selected Minimal/Grotesk, and TK manually selected Expressive/Display. The three separately downloaded TK object PNGs matched the corresponding source-image crops exactly in every RGBA channel. This verifies export preservation, not universal generative adherence to the atlas prompt.
+
+Preview version `918554ef-1040-4a73-b1a6-3fdecadaaeed` passed 10/10 no-AI smoke checks. New clients upload the original File as a bounded binary request, while multipart remains compatible. Native CRC and base64 routines replace JavaScript byte loops. A 5,211,689-byte PNG was accepted remotely and downloaded with an identical SHA-256. Sampled upload CPU time improved from 354 ms before these changes to 60–110 ms for binary uploads; all sampled completed requests returned 201, but this is not evidence of a sustained 10 ms CPU guarantee or an increased Free quota. Hosting remains on the user's existing Free plan.

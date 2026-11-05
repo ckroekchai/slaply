@@ -53,12 +53,26 @@ async function sessionInfo(request,env) {
   return json({...allowance,models:models(env),uploads:{documents:documentUploadsEnabled(env)},session:{createdAt:current.created_at,expiresAt:current.expires_at},activeJob:activeJob||null,latestRecipe},200,cookie?{'Set-Cookie':cookie}:{});
 }
 async function upload(request,env,current) {
-  if(!request.headers.get('Content-Type')?.startsWith('multipart/form-data'))throw new HttpError(415,'INVALID_INPUT','กรุณาอัปโหลดไฟล์รูป');
-  let form;
-  try { form=await new Response(await readBytes(request,MAX_UPLOAD_BYTES+64*1024),{headers:{'Content-Type':request.headers.get('Content-Type')}}).formData(); } catch(error) { if(error instanceof HttpError)throw error;throw new HttpError(400,'INVALID_INPUT','เปิดไฟล์อัปโหลดไม่ได้'); }
-  const file=form.get('file');
-  if(!file || typeof file.arrayBuffer!=='function' || file.size<1 || file.size>MAX_UPLOAD_BYTES)throw new HttpError(400,'INVALID_INPUT','เลือกไฟล์ขนาดไม่เกิน 5 MB');
-  const bytes=new Uint8Array(await file.arrayBuffer()),image=identifyArtwork(bytes,file);
+  const contentType=request.headers.get('Content-Type')||'';
+  let file,bytes;
+  if(contentType.startsWith('multipart/form-data')){
+    // Keep older clients compatible. New clients send the original binary body
+    // to avoid multipart parsing and extra File copies on Workers Free.
+    let form;
+    try { form=await new Response(await readBytes(request,MAX_UPLOAD_BYTES+64*1024),{headers:{'Content-Type':contentType}}).formData(); } catch(error) { if(error instanceof HttpError)throw error;throw new HttpError(400,'INVALID_INPUT','เปิดไฟล์อัปโหลดไม่ได้'); }
+    file=form.get('file');
+    if(!file || typeof file.arrayBuffer!=='function' || file.size<1 || file.size>MAX_UPLOAD_BYTES)throw new HttpError(400,'INVALID_INPUT','เลือกไฟล์ขนาดไม่เกิน 5 MB');
+    bytes=new Uint8Array(await file.arrayBuffer());
+  }else{
+    const type=contentType.split(';')[0].trim().toLowerCase();
+    if(!['image/png','image/jpeg','image/webp','image/svg+xml','application/pdf','application/octet-stream'].includes(type))throw new HttpError(415,'INVALID_INPUT','กรุณาอัปโหลดไฟล์รูป');
+    let name;try{name=decodeURIComponent(request.headers.get('X-File-Name')||'');}catch{throw new HttpError(400,'INVALID_INPUT','ชื่อไฟล์ไม่ถูกต้อง');}
+    if(!name||name.length>512||/[\u0000-\u001f\u007f]/.test(name))throw new HttpError(400,'INVALID_INPUT','ชื่อไฟล์ไม่ถูกต้อง');
+    bytes=await readBytes(request,MAX_UPLOAD_BYTES);
+    if(!bytes.length)throw new HttpError(400,'INVALID_INPUT','เลือกไฟล์ขนาดไม่เกิน 5 MB');
+    file={name,type,size:bytes.length};
+  }
+  const image=identifyArtwork(bytes,file);
   if(image.vector&&!documentUploadsEnabled(env))throw new HttpError(400,'DOCUMENT_UPLOADS_DISABLED','ขณะนี้รองรับ JPG, PNG และ WebP กรุณาแปลงไฟล์ SVG/PDF เป็นรูปภาพก่อนอัปโหลด');
   const mime=image.mime,digest=await hashBytes(bytes),id=crypto.randomUUID(),name=safeName(file.name),key=`brand-pot/originals/${current.id}/${id}`,ip=await ipHash(request),today=day();
   // One atomic INSERT guards upload volume even when clients upload concurrently.

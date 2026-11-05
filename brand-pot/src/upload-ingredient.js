@@ -28,8 +28,7 @@ export async function uploadIngredient(file,{request=apiRequest,read=readRaster,
   let rgb;
   if(localRaster){const source=await read(file,rasterMime);if(!isCurrent())return null;rgb=await sample(source);}
   if(!isCurrent())return null;
-  const body=new FormData();body.append('file',file);
-  const uploaded=await request('/api/uploads',{method:'POST',body});
+  const uploaded=await request('/api/uploads',{method:'POST',body:file,headers:{'Content-Type':file.type||'application/octet-stream','X-File-Name':encodeURIComponent(file.name)}});
   if(!isCurrent())return null;
   const source=safeGuidelineImage(uploaded.url||uploaded.src);
   const serverDocument=['image/svg+xml','application/pdf'].includes(uploaded.mime);

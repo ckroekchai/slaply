@@ -1,6 +1,7 @@
 import { inspectImage } from './image-validation.mjs';
 import { modelPolicy, summarizeUsage } from './model-policy.mjs';
-export const PROMPT_VERSION = 'brand-guideline-2026-11-05.2';
+import { BRAND_OBJECT_IDS, objectCrop } from '../shared/brand-objects.mjs';
+export const PROMPT_VERSION = 'brand-guideline-2026-11-05.3';
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 export const MAX_JOB_UPLOAD_BYTES = 18 * 1024 * 1024;
 export const SESSION_DAYS = 90;
@@ -71,7 +72,7 @@ export function validateJob(body) {
 export function normalizeCustomization(input = {}) {
   input=input&&typeof input==='object'&&!Array.isArray(input)?input:{};
   const clamp = (key, lo, hi, fallback) => typeof input[key] === 'number' && Number.isFinite(input[key]) ? Math.min(hi, Math.max(lo, input[key])) : fallback;
-  const objectStyles = Array.isArray(input.objectStyles) ? ['bloom','orbit','ribbon'].filter(v => input.objectStyles.includes(v)) : ['bloom'];
+  const objectStyles = Array.isArray(input.objectStyles) ? ['bloom','orbit','ribbon',...BRAND_OBJECT_IDS].filter(v => input.objectStyles.includes(v)) : ['bloom'];
   const board={};
   for(const [key,values] of Object.entries({layout:['auto','editorial','expressive','minimal'],fontPair:['auto','grotesk','editorial-serif','display'],density:['auto','airy','balanced','compact'],pattern:['auto','repeat','stripe','tile'],logoBackdrop:['auto','light','dark']}))if(Object.hasOwn(input,key))board[key]=values.includes(input[key])?input[key]:values[0];
   if(Object.hasOwn(input,'logoScale'))board.logoScale=clamp('logoScale',70,115,100);
@@ -105,10 +106,11 @@ ANALYSIS_SCHEMA.properties.brandSystem=objectSchema({
   palette:{type:'array',minItems:5,maxItems:5,items:objectSchema({role:enumSchema(paletteRoles),hex:{type:'string',pattern:'^#[0-9A-Fa-f]{6}$'},name:string})},
   typography:objectSchema({headingSample:string,bodySample:string}),
   pattern:objectSchema({kind:enumSchema(['repeat','stripe','tile'])}),
+  objects:{type:'array',minItems:3,maxItems:3,items:objectSchema({id:enumSchema(BRAND_OBJECT_IDS),name:string,rationale:string,visual:string,colors:{type:'array',minItems:1,maxItems:3,items:enumSchema(['primary','secondary','accent'])}})},
   applications:{type:'array',minItems:2,maxItems:2,items:objectSchema({kind:enumSchema(['social','business-card']),headline:string,body:string})},
 });
 ANALYSIS_SCHEMA.required.push('schemaVersion','design','brandSystem');
-export function validateBrandSystem(data) {
+export function validateBrandSystem(data,{requireObjects=false}={}) {
   const bad=()=>{throw new HttpError(502,'AI_INVALID_OUTPUT','AI ส่งรายละเอียด Brand Guideline ไม่ครบ กรุณาลองใหม่');};
   const text=(value,max)=>typeof value==='string'&&value.trim().length>0&&value.length<=max&&!/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(value);
   if(data.schemaVersion!==6||!data.design||Object.entries(DESIGN_ENUMS).some(([key,values])=>!values.includes(data.design[key])))bad();
@@ -116,11 +118,17 @@ export function validateBrandSystem(data) {
   if(!system||!Array.isArray(system.palette)||system.palette.length!==5||new Set(system.palette.map(x=>x?.role)).size!==5||system.palette.some(x=>!x||!paletteRoles.includes(x.role)||!/^#[a-f0-9]{6}$/i.test(x.hex)||!text(x.name,60)))bad();
   if(!system.typography||!text(system.typography.headingSample,100)||!text(system.typography.bodySample,320)||!['repeat','stripe','tile'].includes(system.pattern?.kind))bad();
   if(!Array.isArray(system.applications)||system.applications.length!==2||new Set(system.applications.map(x=>x?.kind)).size!==2||system.applications.some(x=>!x||!['social','business-card'].includes(x.kind)||!text(x.headline,100)||!text(x.body,320)))bad();
+  // Persisted v6 recipes made before object sets remain readable. New AI output
+  // must include three distinct concepts before the paid image stage starts.
+  if(requireObjects||system.objects!==undefined){
+    const objects=system.objects;
+    if(!Array.isArray(objects)||objects.length!==3||new Set(objects.map(x=>x?.id)).size!==3||new Set(objects.map(x=>x?.name?.trim())).size!==3||objects.some(x=>!x||!BRAND_OBJECT_IDS.includes(x.id)||!text(x.name,50)||!text(x.rationale,240)||!text(x.visual,500)||!Array.isArray(x.colors)||x.colors.length<1||x.colors.length>3||new Set(x.colors).size!==x.colors.length||x.colors.some(color=>!['primary','secondary','accent'].includes(color))))bad();
+  }
   const color=role=>system.palette.find(x=>x.role===role).hex.toUpperCase();
   if(['primary','secondary','accent'].some((role,i)=>color(role)!==data.palette[i].toUpperCase())||color('paper')!==data.paper.toUpperCase()||color('ink')!==data.ink.toUpperCase())bad();
   return data;
 }
-export function validateAnalysis(data, count, suppliedName = '', schemaVersion = 5) {
+export function validateAnalysis(data, count, suppliedName = '', schemaVersion = 5, requireObjects = false) {
   const bad = () => { throw new HttpError(502, 'AI_INVALID_OUTPUT', 'AI ส่งผลลัพธ์ไม่ครบ กรุณาลองปรุงใหม่'); };
   if (!data || typeof data !== 'object') bad();
   // A supplied name is authoritative; the model should not be forced to invent another.
@@ -130,7 +138,7 @@ export function validateAnalysis(data, count, suppliedName = '', schemaVersion =
   if (!['fresh','bold','luxe'].includes(data.mood) || !Array.isArray(data.palette) || data.palette.length !== 3 || [...data.palette,data.paper,data.ink].some(v=>!/^#[a-f0-9]{6}$/i.test(v))) bad();
   if (!Array.isArray(data.keywords) || data.keywords.length !== 3 || data.keywords.some(v=>typeof v!=='string'||!v.trim()||v.length>32)) bad();
   if (!Array.isArray(data.observations) || data.observations.length !== count || new Set(data.observations.map(x=>x?.ingredientIndex)).size !== count || data.observations.some(x=>!x||!Number.isInteger(x.ingredientIndex)||x.ingredientIndex<1||x.ingredientIndex>count||typeof x.observed!=='string'||!x.observed.trim()||x.observed.length>300||typeof x.inspiration!=='string'||!x.inspiration.trim()||x.inspiration.length>300)) bad();
-  if(schemaVersion===6)validateBrandSystem(data);
+  if(schemaVersion===6)validateBrandSystem(data,{requireObjects});
   return data;
 }
 export function analysisDiagnostics(data, count, suppliedName = '') {
@@ -161,6 +169,10 @@ export function buildRecipe(job, analysis, assets, imageId, env) {
   const v6=analysis.schemaVersion===6;
   const result={schemaVersion:v6?6:5,id:job.id,jobId:job.id,version:1,sourceName:input.brief.name || analysis.proposedName,name:input.brief.name || analysis.proposedName,words:input.brief.words || analysis.concept.summary,brief:input.brief,concept:analysis.concept,mood:analysis.mood,palette:analysis.palette,paper:analysis.paper,ink:analysis.ink,keywords:analysis.keywords,audience:analysis.audience,promise:analysis.promise,observations:analysis.observations,image:primary.src,productImage:primary.src,referenceImage:reference.src,referenceColor:analysis.palette[0],generatedImage:`/api/assets/${imageId}`,logo,ingredients,locked:ingredients.some(x=>x.locked),strength:64,format:'guideline',customization:normalizeCustomization(v6?{objectStyles:[],layout:'auto',fontPair:'auto',density:'auto',pattern:'auto',logoBackdrop:'auto',logoScale:100}:{objectStyles:[]}),createdAt:now(),ai:{textModel:policy.text,imageModel:policy.image,policy,promptVersion:PROMPT_VERSION,generatedAt:now(),status:'generated',originalsPreserved:true,...usage}};
   if(v6){result.design=analysis.design;result.brandSystem=analysis.brandSystem;result.palette=['primary','secondary','accent'].map(role=>analysis.brandSystem.palette.find(color=>color.role===role).hex);result.paper=analysis.brandSystem.palette.find(color=>color.role==='paper').hex;result.ink=analysis.brandSystem.palette.find(color=>color.role==='ink').hex;result.referenceColor=result.palette[0];}
+  if(v6&&analysis.brandSystem.objects?.length===3){
+    result.brandObjects=BRAND_OBJECT_IDS.map(id=>({...analysis.brandSystem.objects.find(item=>item.id===id),src:result.generatedImage,crop:objectCrop(id),width:512,height:512}));
+    result.customization.objectStyles=[...BRAND_OBJECT_IDS];result.customization.objectStyle=BRAND_OBJECT_IDS[0];
+  }
   return result;
 }
 export function publicError(error) {

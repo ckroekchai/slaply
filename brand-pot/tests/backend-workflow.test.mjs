@@ -7,7 +7,7 @@ import { hashBytes,validateAnalysis,validateJob,inspectImage,normalizeCustomizat
 
 // Bundle the actual Worker class. Only the platform-provided constructor is replaced;
 // .run(), provider fetches, D1 mutations, R2 writes and all validations remain real code.
-const bundled=await build({entryPoints:[new URL('../worker/workflow.mjs',import.meta.url).pathname],bundle:true,write:false,format:'esm',platform:'browser',plugins:[{name:'platform-constructor',setup(build){build.onResolve({filter:/^cloudflare:workers$/},()=>({path:'cloudflare:workers',namespace:'platform'}));build.onLoad({filter:/.*/,namespace:'platform'},()=>({contents:'export class WorkflowEntrypoint { constructor(ctx,env){this.ctx=ctx;this.env=env;} }'}));}}]});
+const bundled=await build({entryPoints:[new URL('../worker/workflow.mjs',import.meta.url).pathname],bundle:true,write:false,format:'esm',platform:'browser',external:['node:*'],plugins:[{name:'platform-constructor',setup(build){build.onResolve({filter:/^cloudflare:workers$/},()=>({path:'cloudflare:workers',namespace:'platform'}));build.onLoad({filter:/.*/,namespace:'platform'},()=>({contents:'export class WorkflowEntrypoint { constructor(ctx,env){this.ctx=ctx;this.env=env;} }'}));}}]});
 const {BrandGenerationWorkflow,runBrandGeneration}=await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`);
 const generatedPng=new Uint8Array(readFileSync(new URL('./backend-fixtures/generated.png',import.meta.url)));
 const step=()=>({calls:[],async do(name,options,callback){this.calls.push({name,options:typeof options==='function'?null:options});try{return structuredClone(await (callback||options)());}catch(error){throw new Error(error.message);}}});
@@ -48,14 +48,31 @@ test('actual Workflow.run takes one logo and brief through both providers to a c
   assert.match(vision.instructions,/ready-to-use customer-facing brand copy/);assert.match(vision.instructions,/Never put art direction, layout instructions, workflow descriptions/);assert.match(vision.instructions,/no invented addresses, phone numbers, prices/);
   assert.equal(vision.input[0].content.find(part=>part.type==='input_image').detail,'high');assert.equal(vision.input[0].content.find(part=>part.type==='input_image').image_url,`data:image/png;base64,${Buffer.from(original).toString('base64')}`);
   assert.deepEqual({model:image.model,n:image.n,quality:image.quality,complexity:image.complexity,size:image.size},{model:'gpt-image-2.6-flare',n:1,quality:'low',complexity:'low',size:'1024x1024'});
-  assert.match(image.prompt,/Selected visual treatment: illustration/);
+  assert.match(image.prompt,/Visual treatment: illustration/);assert.match(image.prompt,/exactly THREE distinct brand objects/);assert.match(image.prompt,/BOTTOM RIGHT quadrant: entirely empty/);
   assert.equal(JSON.stringify(image).includes('data:image'),false,'Original is not sent for generative redraw');
   const job=stored(ctx),recipe=JSON.parse(job.recipe_json),usage=JSON.parse(job.usage_json);
   assert.equal(recipe.customization.logoBackdrop,'auto');assert.equal(recipe.schemaVersion,6);assert.equal(recipe.name,'ทดสอบแบรนด์');assert.equal(recipe.sourceName,'ทดสอบแบรนด์');assert.equal(recipe.logo.assetId,ctx.logo.id);assert.equal(recipe.logo.sha256,await hashBytes(original));assert.equal(recipe.logo.preserveOriginal,true);assert.deepEqual([recipe.logo.width,recipe.logo.height],[1,1]);
   assert.deepEqual(recipe.design,analysisV6.design);assert.deepEqual(recipe.brandSystem,analysisV6.brandSystem);assert.equal(recipe.ingredients[0].role,'logo');
+  assert.deepEqual(recipe.brandObjects.map(item=>item.id),['object-1','object-2','object-3']);assert.deepEqual(recipe.customization.objectStyles,['object-1','object-2','object-3']);
+  assert.equal(new Set(recipe.brandObjects.map(item=>item.src)).size,1,'One paid image contains the coordinated family');assert.equal(recipe.brandObjects[1].crop.x,.5);assert.equal(recipe.brandObjects[2].crop.y,.5);
+  for(const object of analysisV6.brandSystem.objects){assert(image.prompt.includes(object.visual));assert(recipe.brandObjects.some(item=>item.name===object.name&&item.rationale===object.rationale));}
   assert.deepEqual((await call(ctx,recipe.logo.src,{cookie:ctx.cookie})).data,original);assert.equal(usage.vision.status,200);assert.equal(usage.image.status,200);assert.ok(recipe.ai.estimatedCostUSD>0);assert.equal(recipe.ai.costComplete,true);
   const save=await call(ctx,'/api/recipes',{method:'POST',cookie:ctx.cookie,body:{recipe:{...recipe,sourceName:'forged source',logo:{src:'https://fake.test/logo'},design:{template:'fake'},customization:{layout:'minimal',fontPair:'display',density:'compact',pattern:'tile',logoBackdrop:'dark',logoScale:110}}}});
   assert.equal(save.status,201);assert.equal(save.data.recipe.sourceName,'ทดสอบแบรนด์');assert.deepEqual(save.data.recipe.logo,recipe.logo);assert.deepEqual(save.data.recipe.design,recipe.design);assert.equal(save.data.recipe.customization.logoScale,110);assert.equal(save.data.recipe.customization.layout,'minimal');assert.equal(save.data.recipe.customization.logoBackdrop,'dark');assert.equal(normalizeCustomization({logoBackdrop:'light'}).logoBackdrop,'light');
+});
+
+test('new generation rejects missing, duplicated or unbranded object plans before the image call',async()=>{
+  for(const change of [system=>delete system.objects,system=>system.objects.pop(),system=>system.objects[1].id=system.objects[0].id,system=>system.objects[1].name=system.objects[0].name,system=>system.objects[0].rationale='',system=>system.objects[0].colors=['not-a-palette-role']]){
+    const ctx=await submitted(),invalid=structuredClone(analysisV6);change(invalid.brandSystem);const stub=provider({analysis:invalid});
+    assert.equal((await execute(ctx,stub)).status,'failed');assert.equal(stub.calls.length,1);assert.equal(stored(ctx).error_code,'AI_INVALID_OUTPUT');
+  }
+});
+
+test('saved object selections persist while original AI object concepts and geometry cannot be forged',async()=>{
+  const ctx=await submitted();await execute(ctx,provider());const recipe=JSON.parse(stored(ctx).recipe_json);
+  const response=await call(ctx,'/api/recipes',{method:'POST',cookie:ctx.cookie,body:{recipe:{...recipe,brandObjects:[{id:'object-1',src:'https://evil.test/other',crop:{x:-5,y:0,w:8,h:9}}],customization:{...recipe.customization,objectStyles:['object-2'],objectScale:115}}}});
+  assert.equal(response.status,201);assert.deepEqual(response.data.recipe.brandObjects,recipe.brandObjects);assert.deepEqual(response.data.recipe.customization.objectStyles,['object-2']);assert.equal(response.data.recipe.customization.objectScale,115);
+  const restored=await call(ctx,'/api/recipes',{cookie:ctx.cookie});assert.deepEqual(restored.data.recipes[0].brandObjects,recipe.brandObjects);assert.deepEqual(restored.data.recipes[0].customization.objectStyles,['object-2']);
 });
 
 test('logo role is independent of priority locks and is included in idempotency identity',async()=>{
@@ -97,7 +114,7 @@ test('a cached pre-v6 analysis resumes with material artwork without repeating p
   const cachedStep={async do(name,options,callback){if(name==='understand-brand-ingredients')return structuredClone(analysis);return durableStep.do(name,options,callback);}};
   const outcome=await runBrandGeneration(ctx.env,{payload:{jobId:ctx.id}},cachedStep,{fetch:stub.fetch.bind(stub)});
   assert.equal(outcome.status,'ready');assert.equal(stub.calls.length,1);assert.match(stub.calls[0].url,/\/images\/generations$/);assert.match(stub.calls[0].payload.prompt,/Selected visual treatment: material/);
-  const recipe=JSON.parse(stored(ctx).recipe_json);assert.equal(recipe.schemaVersion,5);assert.equal(recipe.design,undefined);assert.equal(recipe.name,'ทดสอบแบรนด์');assert.equal(recipe.ai.promptVersion,'brand-guideline-2026-11-05.2');
+  const recipe=JSON.parse(stored(ctx).recipe_json);assert.equal(recipe.schemaVersion,5);assert.equal(recipe.design,undefined);assert.equal(recipe.name,'ทดสอบแบรนด์');assert.equal(recipe.ai.promptVersion,'brand-guideline-2026-11-05.3');
 });
 
 test('logo admission and v6 schema reject invalid roles, incomplete systems and invented design values',()=>{

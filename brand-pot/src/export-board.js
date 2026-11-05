@@ -1,6 +1,7 @@
 import { BOARD_FONT_CATALOG, buildBrandBoardScene, layoutBrandBoardText, renderBrandBoardSVG } from './brand-board-scene.js';
 import { createBoardPDF, tagSRGBPNG } from './export-formats.js';
 import { resolveLogoBackdrop } from './logo-backdrop.js';
+import { brandObjects } from './brand-objects.js';
 
 const rasterData=/^data:image\/(png|jpe?g|webp);base64,[a-z\d+/=\s]+$/i;
 const originalData=/^data:(?:image\/(?:png|jpe?g|webp|svg\+xml)|application\/pdf);base64,[a-z\d+/=\s]+$/i;
@@ -67,6 +68,18 @@ function pngBlob(canvas) {
 }
 const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+export async function createObjectExport(recipe,id) {
+  const object=brandObjects(recipe).find(item=>item.id===id);
+  if(!object)throw new Error('ไม่พบ Brand object นี้');
+  const source=await dataURL(await localBlob(object.src,'image'));
+  const {x,y,w,h}=object.crop;
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="${x*1024} ${y*1024} ${w*1024} ${h*1024}"><image href="${escape(source)}" x="0" y="0" width="1024" height="1024"/></svg>`;
+  const image=await imageFromSVG(svg),canvas=document.createElement('canvas');canvas.width=canvas.height=512;
+  const context=canvas.getContext('2d',{colorSpace:'srgb'});if(!context)throw new Error('สร้างไฟล์ภาพไม่ได้');
+  context.drawImage(image,0,0);
+  return new Blob([tagSRGBPNG(await(await pngBlob(canvas)).arrayBuffer(),{dpi:300})],{type:'image/png'});
+}
+
 /** Returns a real file independently of download UI; all formats share the same scene. */
 export async function createBoardExport(recipe,mood,type) {
   if(!['png','pdf','html','json'].includes(type))throw new Error('ไม่รองรับรูปแบบส่งออกนี้');
@@ -95,6 +108,7 @@ export async function createBoardExport(recipe,mood,type) {
     };
     const embedded={...recipe,logo:await embedItem(recipe.logo)};
     for(const key of ['generatedImage','image','productImage','referenceImage'])if(recipe[key])embedded[key]=await embeddedSource(recipe[key]);
+    if(recipe.brandObjects)embedded.brandObjects=brandObjects(recipe).map(object=>({...object,src:embedded.generatedImage}));
     embedded.ingredients=await Promise.all((recipe.ingredients||[]).map(embedItem));
     const result={schema:'slaply.brand-recipe.v6',createdAt:new Date().toISOString(),recipe:embedded,guideline:{size:scene.size,template:scene.templateId,fontPair:scene.fontPairId,palette:scene.palette,colorSpace:'sRGB',dpi:300}};
     return {blob:new Blob([JSON.stringify(result,null,2)],{type:'application/json;charset=utf-8'}),scene};

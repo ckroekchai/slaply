@@ -29,6 +29,21 @@ test('non-image payload and deceptive declared MIME are rejected',async()=>{
   const ctx=environment(),cookie=await start(ctx),form=new FormData();form.set('file',new Blob(['<svg onload="alert(1)"></svg>'],{type:'image/png'}),'evil.png');
   assert.equal((await call(ctx,'/api/uploads',{method:'POST',cookie,body:form})).status,400);assert.equal(ctx.storage.size,0);
 });
+test('raw uploads preserve original bytes, Thai filenames, metadata and ownership',async()=>{
+  const ctx=environment(),owner=await start(ctx),other=await start(ctx);
+  const result=await call(ctx,'/api/uploads',{method:'POST',cookie:owner,body:png,headers:{'Content-Type':'application/octet-stream','X-File-Name':encodeURIComponent('โลโก้ ต้นฉบับ.png')}});
+  assert.equal(result.status,201);assert.equal(result.data.name,'โลโก้ ต้นฉบับ.png');assert.equal(result.data.mime,'image/png');assert.equal(result.data.bytes,png.length);assert.equal(result.data.width,1);
+  assert.deepEqual((await call(ctx,result.data.url,{cookie:owner})).data,png);
+  assert.equal((await call(ctx,result.data.url,{cookie:other})).status,404);
+  assert.equal(ctx.storage.size,1);assert.equal(ctx.created,0);
+});
+test('raw upload limits, invalid headers and disguised documents reject before storage or quota',async()=>{
+  const ctx=environment(),cookie=await start(ctx),headers={'Content-Type':'image/png','X-File-Name':'logo.png'};
+  for(const [body,overrides,status] of [[new Uint8Array(),{},400],[new Uint8Array(MAX_UPLOAD_BYTES+1),{},413],[png,{'Content-Length':String(MAX_UPLOAD_BYTES+1)},413],[png,{'X-File-Name':'%ZZ'},400],[png,{'X-File-Name':'bad%0Aname.png'},400],[png,{'X-File-Name':''},400],[png,{'Content-Type':'text/html'},415],[new TextEncoder().encode('<svg/>'),{},400],[new TextEncoder().encode('<svg/>'),{'Content-Type':'image/svg+xml','X-File-Name':'logo.svg'},400]]){
+    const result=await call(ctx,'/api/uploads',{method:'POST',cookie,body,headers:{...headers,...overrides}});assert.equal(result.status,status,JSON.stringify(result.data));
+  }
+  assert.equal(ctx.storage.size,0);assert.equal(ctx.created,0);assert.equal(ctx.sql.prepare('SELECT COUNT(*) AS n FROM brand_assets').get().n,0);
+});
 test('idempotency replay starts one workflow and mismatched content conflicts',async()=>{
   const ctx=environment(),cookie=await start(ctx),body=requestBody(await inputs(ctx,cookie));
   const first=await call(ctx,'/api/jobs',{method:'POST',cookie,body}),same=await call(ctx,'/api/jobs',{method:'POST',cookie,body});

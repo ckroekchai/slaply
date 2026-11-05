@@ -196,6 +196,10 @@ async function standaloneHTML(model,embedded) {
 /** Download the current, customized guideline with embedded original and generated assets. */
 export async function exportBrand(recipe,mood,type) {
   if(!recipe||!mood)throw new Error('A brand recipe and direction are required.');
+  if(/^object-[123]$/.test(type)){
+    const {createObjectExport}=await import('./export-board.js');const blob=await createObjectExport(recipe,type);
+    download(blob,filename(recipe,'png').replace('-slaply.png',`-slaply-${type}.png`));return;
+  }
   if(type==='asset'){if(!recipe.generatedImage)throw new Error('สูตรนี้ยังไม่มีภาพ AI');const data=await imageDataURL(recipe.generatedImage);const blob=await(await fetch(data)).blob();download(blob,filename(recipe,'png').replace('-slaply.png','-slaply-ai.png'));return;}
   if(Number(recipe.schemaVersion)>=6){
     const {createBoardExport}=await import('./export-board.js');

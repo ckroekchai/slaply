@@ -16,7 +16,7 @@ function environment(extra={}){
 async function call(ctx,path,{method='GET',cookie,body,headers={}}={}){
   const h={'CF-Connecting-IP':'203.0.113.12',...headers};if(cookie)h.Cookie=cookie;
   if(method!=='GET'&&method!=='HEAD')h.Origin=origin;
-  if(body&&!(body instanceof FormData)){h['Content-Type']='application/json';body=JSON.stringify(body);}
+  if(body&&!(body instanceof FormData)&&!(body instanceof Blob)&&!ArrayBuffer.isView(body)&&!(body instanceof ArrayBuffer)&&!(body instanceof ReadableStream)){h['Content-Type']='application/json';body=JSON.stringify(body);}
   const response=await handleApi(new Request(origin+path,{method,headers:h,body}),ctx.env);
   const contentType=response.headers.get('Content-Type')||'';
   const data=contentType.startsWith('application/json')?await response.json():new Uint8Array(await response.arrayBuffer());
@@ -39,3 +39,5 @@ async function completedRecipe(ctx,cookie){
 
 export {origin,png,environment,call,start,upload,inputs,requestBody,analysis,completedRecipe};
 export const analysisV6={...analysis,schemaVersion:6,design:{template:'editorial',fontPair:'editorial-serif',imageStyle:'illustration',density:'airy'},brandSystem:{palette:[{role:'primary',hex:analysis.palette[0],name:'Leaf'},{role:'secondary',hex:analysis.palette[1],name:'Apricot'},{role:'accent',hex:analysis.palette[2],name:'Slate'},{role:'paper',hex:analysis.paper,name:'Paper'},{role:'ink',hex:analysis.ink,name:'Ink'}],typography:{headingSample:'ทดสอบแบรนด์',bodySample:'แนวคิดที่ออกแบบจากบรีฟ'},pattern:{kind:'stripe'},applications:[{kind:'social',headline:'ทดสอบแบรนด์',body:'พบกับแนวคิดของแบรนด์'},{kind:'business-card',headline:'ทดสอบแบรนด์',body:'จุดเริ่มต้นของบทสนทนา'}]}};
+
+analysisV6.brandSystem.objects=[{id:'object-1',name:'ใบไม้พับ',rationale:'รูปทรงใบไม้สื่อความอบอุ่นและการเริ่มต้น',visual:'A single folded leaf with a clean rounded silhouette',colors:['primary']},{id:'object-2',name:'ซุ้มโค้ง',rationale:'เส้นโค้งเปิดรับบทสนทนาอย่างเป็นกันเอง',visual:'A single soft architectural arch with a rounded top',colors:['secondary','accent']},{id:'object-3',name:'หยดแสง',rationale:'หยดเล็กเป็นจุดเน้นที่สนุกแต่เรียบง่าย',visual:'A single asymmetrical teardrop with a small curved tip',colors:['accent']}];

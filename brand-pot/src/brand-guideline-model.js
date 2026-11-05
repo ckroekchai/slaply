@@ -1,3 +1,4 @@
+import { BRAND_OBJECT_IDS } from '../shared/brand-objects.mjs';
 export const GUIDELINE_SIZE = Object.freeze({ width: 1600, height: 1120 });
 export const DEFAULT_CUSTOMIZATION = Object.freeze({ textScale: 100, objectScale: 100, objectStyles: Object.freeze(['bloom']), objectStyle: 'bloom', hue: 0, brightness: 100, saturation: 100 });
 export const DEFAULT_BOARD_CUSTOMIZATION = Object.freeze({ ...DEFAULT_CUSTOMIZATION, layout: 'auto', fontPair: 'auto', density: 'auto', pattern: 'auto', logoBackdrop: 'auto', logoScale: 100 });
@@ -25,7 +26,7 @@ export function normalizeCustomization(value = {}) {
   value = value && typeof value === 'object' ? value : {};
   // An explicit list (including []) wins over the legacy single-family field.
   const selected = Array.isArray(value.objectStyles) ? value.objectStyles : [value.objectStyle || 'bloom'];
-  const objectStyles = BRAND_OBJECTS.filter(item => selected.includes(item.id)).map(item => item.id);
+  const objectStyles = [...BRAND_OBJECTS.map(item=>item.id),...BRAND_OBJECT_IDS].filter(id=>selected.includes(id));
   if (!Array.isArray(value.objectStyles) && !objectStyles.length) objectStyles.push('bloom');
   return {
     textScale: clamp(value.textScale, 75, 125, 100),

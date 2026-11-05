@@ -1,4 +1,5 @@
 import { HttpError } from './core.mjs';
+import { crc32 as nativeCRC32 } from 'node:zlib';
 
 const fail = message => { throw new HttpError(400,'INVALID_IMAGE',message||'ไฟล์รูปไม่สมบูรณ์ กรุณาเลือก PNG, JPG หรือ WebP ภาพนิ่งที่เปิดได้'); };
 const animated = () => fail('รองรับภาพนิ่งเท่านั้น กรุณาส่งโลโก้หรือรูปภาพเป็น PNG, JPG หรือ WebP ภาพนิ่ง');
@@ -8,9 +9,9 @@ function dimensions(width,height) {
   return {width,height};
 }
 function crc32(bytes,start,end) {
-  let crc=0xffffffff;
-  for(let i=start;i<end;i++){crc^=bytes[i];for(let bit=0;bit<8;bit++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}
-  return (crc^0xffffffff)>>>0;
+  // Native CRC keeps full integrity validation affordable for 5 MiB uploads on
+  // Workers Free. A bit-by-bit JavaScript loop consumed hundreds of CPU ms.
+  return nativeCRC32(bytes.subarray(start,end));
 }
 const ascii=(bytes,start,length)=>String.fromCharCode(...bytes.subarray(start,start+length));
 function png(b,view) {
