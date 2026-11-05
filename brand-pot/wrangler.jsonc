@@ -17,11 +17,14 @@
     "run_worker_first": true
   },
   "vars": {
-    "OPENAI_BRAND_MODEL": "gpt-5.4-mini",
-    "OPENAI_IMAGE_MODEL": "gpt-image-2",
+    "OPENAI_BRAND_MODEL": "gpt-6-luna",
+    "OPENAI_IMAGE_MODEL": "gpt-image-2.6-flare",
     "DAILY_SESSION_LIMIT": "5",
     "DAILY_IP_LIMIT": "10",
-    "DAILY_GLOBAL_LIMIT": "40"
+    "DAILY_GLOBAL_LIMIT": "40",
+    "OPENAI_IMAGE_QUALITY": "low",
+    "OPENAI_IMAGE_COMPLEXITY": "low",
+    "OPENAI_IMAGE_SIZE": "1024x1024"
   },
   "d1_databases": [
     {
@@ -55,11 +58,14 @@
         "slaply.co/*"
       ],
       "vars": {
-        "OPENAI_BRAND_MODEL": "gpt-5.4-mini",
-        "OPENAI_IMAGE_MODEL": "gpt-image-2",
+        "OPENAI_BRAND_MODEL": "gpt-6-luna",
+        "OPENAI_IMAGE_MODEL": "gpt-image-2.6-flare",
         "DAILY_SESSION_LIMIT": "5",
         "DAILY_IP_LIMIT": "10",
-        "DAILY_GLOBAL_LIMIT": "40"
+        "DAILY_GLOBAL_LIMIT": "40",
+        "OPENAI_IMAGE_QUALITY": "low",
+        "OPENAI_IMAGE_COMPLEXITY": "low",
+        "OPENAI_IMAGE_SIZE": "1024x1024"
       },
       "d1_databases": [
         {
@@ -81,7 +87,21 @@
           "name": "slaply-brand-production",
           "class_name": "BrandGenerationWorkflow"
         }
+      ],
+      "services": [
+        {
+          "binding": "ASSET_CONVERTER",
+          "service": "slaply-asset-converter",
+          "entrypoint": "AssetConverter"
+        }
       ]
     }
-  }
+  },
+  "services": [
+    {
+      "binding": "ASSET_CONVERTER",
+      "service": "slaply-asset-converter",
+      "entrypoint": "AssetConverter"
+    }
+  ]
 }

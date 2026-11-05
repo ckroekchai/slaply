@@ -21,3 +21,33 @@ jobs:
       - run: npm run setup
       - run: npm test
       - run: npm run build
+
+  converter:
+    runs-on: ubuntu-latest
+    env:
+      # Match the compiler used for the validated local WASM artifacts.
+      RUSTUP_TOOLCHAIN: 1.99.1
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            brand-pot/package-lock.json
+            brand-pot/converter/package-lock.json
+      - name: Install pinned Rust and WASM target
+        run: rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --target wasm32-unknown-unknown
+      - run: npm run setup
+      - run: npm run setup:converter
+      - name: Test actual converter in workerd
+        run: npm run test:converter
+      - name: Verify deployable WASM package without publishing
+        run: npm run check:converter
+      - uses: actions/upload-artifact@v4
+        with:
+          name: converter-wasm-manifest
+          path: brand-pot/converter/dist/manifest.json
+          if-no-files-found: error
+          retention-days: 7

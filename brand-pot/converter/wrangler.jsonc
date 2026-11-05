@@ -1,0 +1,12 @@
+{
+  "name": "slaply-asset-converter",
+  "main": "dist/index.js",
+  "no_bundle": true,
+  "compatibility_date": "2026-04-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [],
+  "limits": {"cpu_ms": 1000},
+  "rules": [{"type":"CompiledWasm","globs":["**/*.wasm"],"fallthrough":false}],
+  "find_additional_modules": true
+}

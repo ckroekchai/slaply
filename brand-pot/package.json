@@ -9,10 +9,16 @@
     "test": "node --test tests/*.test.mjs",
     "preview:worker": "wrangler dev --config wrangler.jsonc --port 8788",
     "deploy:preview": "npm run build && wrangler deploy --config wrangler.jsonc",
-    "deploy:production": "npm run build && wrangler deploy --config wrangler.jsonc --env production"
+    "deploy:production": "npm run build && wrangler deploy --config wrangler.jsonc --env production",
+    "setup:converter": "npm --prefix converter ci --ignore-scripts",
+    "build:converter": "npm --prefix converter run build",
+    "test:converter": "npm --prefix converter test",
+    "check:converter": "npm run build:converter && wrangler deploy --config converter/wrangler.jsonc --dry-run --outdir converter/.wrangler/deploy-check",
+    "deploy:converter": "npm run build:converter && wrangler deploy --config converter/wrangler.jsonc"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
+    "pdf-lib": "^1.17.1",
     "react": "19.2.0",
     "react-dom": "19.2.0"
   },

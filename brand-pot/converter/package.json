@@ -1,0 +1,11 @@
+{
+  "name": "slaply-asset-converter",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "scripts": {"build": "node scripts/build-rust.mjs && node scripts/build.mjs", "test": "npm run build && node --test tests/*.test.mjs"},
+  "dependencies": {"@embedpdf/pdfium": "2.15.1", "@xmldom/xmldom": "0.9.12", "fflate": "0.8.3"},
+  "devDependencies": {"miniflare": "4.20260730.0", "esbuild": "0.28.2", "pdf-lib": "1.17.1", "sharp": "0.35.5"},
+  "overrides": {"miniflare": {"undici": "7.30.1", "sharp": "0.35.5"}},
+  "engines": {"node": ">=22.13.0"}
+}

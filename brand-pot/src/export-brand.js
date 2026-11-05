@@ -197,6 +197,11 @@ async function standaloneHTML(model,embedded) {
 export async function exportBrand(recipe,mood,type) {
   if(!recipe||!mood)throw new Error('A brand recipe and direction are required.');
   if(type==='asset'){if(!recipe.generatedImage)throw new Error('สูตรนี้ยังไม่มีภาพ AI');const data=await imageDataURL(recipe.generatedImage);const blob=await(await fetch(data)).blob();download(blob,filename(recipe,'png').replace('-slaply.png','-slaply-ai.png'));return;}
+  if(Number(recipe.schemaVersion)>=6){
+    const {createBoardExport}=await import('./export-board.js');
+    const {blob}=await createBoardExport(recipe,mood,type);
+    download(blob,filename(recipe,type));return;
+  }
   const model=buildGuidelineModel(recipe,mood),embedded=await prepareImages(model);
   if(type==='json'){
     const exportedRecipe={...recipe,format:'brand-artwork',customization:normalizeCustomization(recipe.customization)};
@@ -210,6 +215,11 @@ export async function exportBrand(recipe,mood,type) {
     download(new Blob([JSON.stringify(payload,null,2)],{type:'application/json;charset=utf-8'}),filename(recipe,'json'));return;
   }
   if(type==='png'){download(await canvasBlob(await guidelineCanvas(model,embedded)),filename(recipe,'png'));return;}
+  if(type==='pdf'){
+    const {createBoardPDF}=await import('./export-formats.js');
+    const png=await canvasBlob(await guidelineCanvas(model,embedded));
+    download(new Blob([await createBoardPDF(await png.arrayBuffer(),{...GUIDELINE_SIZE,title:model.name})],{type:'application/pdf'}),filename(recipe,'pdf'));return;
+  }
   if(type==='html'){download(new Blob([await standaloneHTML(model,embedded)],{type:'text/html;charset=utf-8'}),filename(recipe,'html'));return;}
   throw new Error(`Unsupported export format: ${String(type)}`);
 }

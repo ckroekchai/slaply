@@ -1,43 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DatabaseSync } from 'node:sqlite';
-import { readFileSync, readdirSync } from 'node:fs';
 import { handleApi } from '../worker/api.mjs';
 import { MAX_UPLOAD_BYTES,MAX_JOB_UPLOAD_BYTES,sniffImage,validateJob,validateAnalysis,analysisDiagnostics,savedRecipe,sessionCookie,buildRecipe,providerError,hash,day,now } from '../worker/core.mjs';
 import { captureStageFailure, publicJobFailure } from '../worker/failures.mjs';
 
-const origin='https://slaply.co';
-const png=Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=','base64'));
-function environment(extra={}){
-  const sql=new DatabaseSync(':memory:');
-  for(const migration of readdirSync(new URL('../migrations/',import.meta.url)).filter(name=>name.endsWith('.sql')).sort())sql.exec(readFileSync(new URL(`../migrations/${migration}`,import.meta.url),'utf8'));
-  function prepared(query,params=[]){return {bind(...values){return prepared(query,values);},async first(){return sql.prepare(query).get(...params)||null;},async all(){return {results:sql.prepare(query).all(...params)};},async run(){const result=sql.prepare(query).run(...params);return {meta:{changes:Number(result.changes)}};},query,params};}
-  const storage=new Map(),instances=new Map();let created=0;
-  const env={SLAPLY_DB:{prepare:prepared,async batch(statements){sql.exec('BEGIN');try{const result=statements.map(s=>({meta:{changes:Number(sql.prepare(s.query).run(...s.params).changes)}}));sql.exec('COMMIT');return result;}catch(e){sql.exec('ROLLBACK');throw e;}}},SLAPLY_UPLOADS:{async put(key,bytes,options){storage.set(key,{body:bytes,...options});},async get(key){return storage.get(key)||null;},async head(key){return storage.get(key)||null;}},OPENAI_API_KEY:'test-key-never-used',BRAND_GENERATION:{async create({id}){if(instances.has(id))throw new Error('Already exists');created++;instances.set(id,{status:'queued'});return {id};},async get(id){return {async status(){if(!instances.has(id))throw new Error('Not found');return instances.get(id);}};}},...extra};
-  return {env,sql,storage,instances,get created(){return created;}};
-}
-async function call(ctx,path,{method='GET',cookie,body,headers={}}={}){
-  const h={'CF-Connecting-IP':'203.0.113.12',...headers};if(cookie)h.Cookie=cookie;
-  if(method!=='GET'&&method!=='HEAD')h.Origin=origin;
-  if(body&&!(body instanceof FormData)){h['Content-Type']='application/json';body=JSON.stringify(body);}
-  const response=await handleApi(new Request(origin+path,{method,headers:h,body}),ctx.env);
-  const contentType=response.headers.get('Content-Type')||'';
-  const data=contentType.startsWith('application/json')?await response.json():new Uint8Array(await response.arrayBuffer());
-  return {response,data,status:response.status,cookie:response.headers.get('Set-Cookie')?.split(';')[0]};
-}
-async function start(ctx){const result=await call(ctx,'/api/session');assert.equal(result.status,200);return result.cookie;}
-async function upload(ctx,cookie,name='ingredient.png'){const form=new FormData();form.set('file',new Blob([png],{type:'image/png'}),name);const r=await call(ctx,'/api/uploads',{method:'POST',cookie,body:form});assert.equal(r.status,201,JSON.stringify(r.data));return r.data;}
-async function inputs(ctx,cookie){const [a,b]=await Promise.all([upload(ctx,cookie,'first.png'),upload(ctx,cookie,'second.png')]);return {ingredients:[{id:a.id,locked:true},{id:b.id,locked:false}],brief:{name:'ทดสอบแบรนด์',words:'สดใส เรียบง่าย'}};}
-const requestBody=base=>({...base,idempotencyKey:crypto.randomUUID()});
-const analysis={proposedName:'Test',concept:{title:'สดใสในทุกวัน',summary:'แนวคิดจากสีและรูปทรงในภาพ'},mood:'fresh',palette:['#558844','#EEAA66','#223344'],paper:'#FFF9EE',ink:'#202442',keywords:['สดใส','เรียบง่าย','สนุก'],audience:'ผู้ชมที่ผู้ใช้ระบุ',promise:'ออกแบบให้สื่อสารชัดเจน',observations:[{ingredientIndex:1,observed:'รูปทรงสีเขียว',inspiration:'รูปทรงโค้ง'},{ingredientIndex:2,observed:'สีส้ม',inspiration:'จุดเน้นสีส้ม'}],imagePrompt:'Original abstract forms in green and orange.'};
-async function completedRecipe(ctx,cookie){
-  const created=await call(ctx,'/api/jobs',{method:'POST',cookie,body:requestBody(await inputs(ctx,cookie))});
-  const job=ctx.sql.prepare('SELECT * FROM brand_jobs WHERE id=?').get(created.data.id),assets=ctx.sql.prepare('SELECT * FROM brand_assets WHERE session_id=? ORDER BY created_at').all(job.session_id);
-  const recipe=buildRecipe(job,analysis,assets,crypto.randomUUID(),ctx.env);
-  ctx.sql.prepare("UPDATE brand_jobs SET status='ready',phase='ready',recipe_json=? WHERE id=?").run(JSON.stringify(recipe),job.id);
-  const saved=await call(ctx,'/api/recipes',{method:'POST',cookie,body:{recipe:{...recipe,name:'สูตรที่บันทึก',customization:{hue:18,objectStyles:[]}}}});
-  assert.equal(saved.status,201);return saved.data.recipe;
-}
+import {origin,png,environment,call,start,upload,inputs,requestBody,analysis,completedRecipe} from './backend-harness.mjs';
 
 test('session cookie is opaque, HttpOnly, secure, isolated, and not in JSON',async()=>{
   const ctx=environment(),a=await call(ctx,'/api/session'),b=await call(ctx,'/api/session');
@@ -155,7 +122,7 @@ test('payments are inactive and health never exposes credentials',async()=>{
 });
 test('schema, image and recipe validators enforce meaningful boundaries',()=>{
   assert.equal(sniffImage(png),'image/png');
-  const large=png.slice();new DataView(large.buffer).setUint32(16,50000);new DataView(large.buffer).setUint32(20,50000);assert.throws(()=>sniffImage(large),/40/);
+  const large=png.slice();new DataView(large.buffer).setUint32(16,50000);new DataView(large.buffer).setUint32(20,50000);assert.throws(()=>sniffImage(large),error=>error.code==='INVALID_IMAGE');
   assert.throws(()=>sniffImage(Uint8Array.from([255,216,255,0])),/JPG/);
   assert.throws(()=>validateJob({ingredients:[],idempotencyKey:'a'}));
   assert.deepEqual(validateAnalysis(analysis,2),analysis);assert.throws(()=>validateAnalysis({...analysis,palette:['red']},2));assert.throws(()=>validateAnalysis({...analysis,observations:[analysis.observations[0],analysis.observations[0]]},2));
@@ -188,4 +155,13 @@ test('validation diagnostics record structure without model text or user names',
   const diagnostics=analysisDiagnostics({...analysis,proposedName:'',concept:{title:modelText,summary:modelText},imagePrompt:modelText,observations:[{ingredientIndex:1,observed:modelText,inspiration:modelText}]},2,'private user brand');
   assert.equal(diagnostics.fields.proposedName.empty,true);assert.equal(diagnostics.fields.imagePrompt.length,modelText.length);assert.equal(diagnostics.observations.count,1);assert.equal(diagnostics.expectedIngredientCount,2);
   assert.equal(JSON.stringify(diagnostics).includes(modelText),false);assert.equal(JSON.stringify(diagnostics).includes('private user brand'),false);
+});
+
+test('idempotency of pre-v6 requests survives the new role normalization',async()=>{
+  const ctx=environment(),cookie=await start(ctx),body=requestBody(await inputs(ctx,cookie));
+  const first=await call(ctx,'/api/jobs',{method:'POST',cookie,body});
+  const legacyHash=await hash(JSON.stringify({ingredients:body.ingredients,brief:body.brief}));
+  ctx.sql.prepare('UPDATE brand_jobs SET request_hash=?,input_json=? WHERE id=?').run(legacyHash,JSON.stringify(body),first.data.id);
+  const replay=await call(ctx,'/api/jobs',{method:'POST',cookie,body});assert.equal(replay.status,200);assert.equal(replay.data.id,first.data.id);assert.equal(ctx.created,1);
+  const changed=await call(ctx,'/api/jobs',{method:'POST',cookie,body:{...body,ingredients:body.ingredients.map((item,i)=>({...item,role:i===0?'logo':'reference'}))}});assert.equal(changed.status,409);
 });
