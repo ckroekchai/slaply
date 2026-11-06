@@ -1,6 +1,6 @@
 # Brand Guideline Board v6
 
-Implementation and evaluation record, 2026-11-05. This work extends Brand Pot while keeping existing recipes and uploaded originals. Payments remain disabled.
+Historical implementation and evaluation record, 2026-11-05. The input/lock/layout contract below has been superseded by [Brand Guideline v7](brand-board-v7.md); recorded v6 evaluations remain evidence only for the revision they exercised. Existing recipes and uploaded originals are retained. Payments remain disabled.
 
 ## Contract and rendering
 

@@ -1,7 +1,7 @@
 import { BRAND_OBJECT_IDS } from '../shared/brand-objects.mjs';
 export const GUIDELINE_SIZE = Object.freeze({ width: 1600, height: 1120 });
 export const DEFAULT_CUSTOMIZATION = Object.freeze({ textScale: 100, objectScale: 100, objectStyles: Object.freeze(['bloom']), objectStyle: 'bloom', hue: 0, brightness: 100, saturation: 100 });
-export const DEFAULT_BOARD_CUSTOMIZATION = Object.freeze({ ...DEFAULT_CUSTOMIZATION, layout: 'auto', fontPair: 'auto', density: 'auto', pattern: 'auto', logoBackdrop: 'auto', logoScale: 100 });
+export const DEFAULT_BOARD_CUSTOMIZATION = Object.freeze({ ...DEFAULT_CUSTOMIZATION, boardVariant:'ai', layout: 'auto', fontPair: 'auto', density: 'auto', pattern: 'auto', logoBackdrop: 'auto', logoScale: 100 });
 export const BRAND_OBJECTS_ASSET = '/assets/brand-objects.png';
 export const BRAND_OBJECTS = Object.freeze([
   { id: 'bloom', label: 'Bloom', description: 'Soft, playful energy', position: 0, src: BRAND_OBJECTS_ASSET },
@@ -29,6 +29,7 @@ export function normalizeCustomization(value = {}) {
   const objectStyles = [...BRAND_OBJECTS.map(item=>item.id),...BRAND_OBJECT_IDS].filter(id=>selected.includes(id));
   if (!Array.isArray(value.objectStyles) && !objectStyles.length) objectStyles.push('bloom');
   return {
+    ...('boardVariant' in value?{boardVariant:['ai','minimal','professional','creative'].includes(value.boardVariant)?value.boardVariant:'ai'}:{}),
     textScale: clamp(value.textScale, 75, 125, 100),
     objectScale: clamp(value.objectScale, 50, 150, 100),
     objectStyles,

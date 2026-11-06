@@ -64,7 +64,7 @@ export async function createBoardPDF(png, {width,height,title='Brand guideline',
   if(header.getUint32(16)!==width||header.getUint32(20)!==height)throw new Error('PNG dimensions do not match the board.');
   const pdf=await PDFDocument.create();
   pdf.setTitle(String(title));pdf.setCreator('Slaply Brand Pot');pdf.setProducer('Slaply lossless sRGB board exporter');
-  pdf.setSubject('Digital sRGB brand guideline board; original logo preserved. Raster PDF, not editable vector artwork.');
+  pdf.setSubject('Digital sRGB brand guideline board. Raster PDF, not editable vector artwork.');
   const image=await pdf.embedPng(data);
   const page=pdf.addPage([width*72/dpi,height*72/dpi]);
   page.drawImage(image,{x:0,y:0,width:page.getWidth(),height:page.getHeight()});

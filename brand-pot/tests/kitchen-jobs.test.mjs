@@ -4,14 +4,21 @@ import { createKitchenJobs } from '../src/kitchen-jobs.js';
 
 const flush = () => new Promise(resolve => setImmediate(resolve));
 function clock() { let id=0;const pending=new Map();return {setTimeout(fn){pending.set(++id,fn);return id;},clearTimeout(id){pending.delete(id);},async next(){const [id,fn]=pending.entries().next().value||[];if(fn){pending.delete(id);await fn();await flush();}},get size(){return pending.size;}}; }
-const payload={ingredients:[{id:'upload-a',locked:true},null,{id:'upload-b',locked:false}],brief:{name:'แบรนด์',words:'สดใส'}};
+const payload={ingredients:[{id:'upload-a',locked:true},null,{id:'upload-b',locked:false},{id:'upload-c',locked:false}],brief:{name:'แบรนด์',words:'สดใส'}};
+
+test('a lock or long brief cannot bypass the three-ingredient admission rule',()=>{
+  const timer=clock(),errors=[];let submitted=0;
+  const runner=createKitchenJobs({clock:timer,request:async()=>{submitted++;},onState(){},onComplete(){},onError:error=>errors.push(error.message)});
+  assert.equal(runner.start({ingredients:[{id:'a',role:'logo',locked:true}],brief:{words:'Brand direction'}}),null);
+  assert.equal(timer.size,0);assert.equal(submitted,0);assert.match(errors[0],/3/);
+});
 
 test('rapid ingredient edits submit only the latest brief after debounce',async()=>{
   const timer=clock(),submitted=[],completed=[];
   const request=async(path,options)=>{if(path==='/api/jobs'){submitted.push(JSON.parse(options.body));return{id:'job-new'}}return{status:'completed',recipe:{name:'ล่าสุด'}}};
   const runner=createKitchenJobs({clock:timer,request,makeKey:()=> 'key',onState(){},onComplete:r=>completed.push(r)});
   runner.start(payload);runner.start({...payload,brief:{name:'ล่าสุด',words:''}});await timer.next();
-  assert.equal(submitted.length,1);assert.equal(submitted[0].brief.name,'ล่าสุด');assert.deepEqual(submitted[0].ingredients,[{id:'upload-a',locked:true},{id:'upload-b',locked:false}]);assert.equal(completed[0].name,'ล่าสุด');
+  assert.equal(submitted.length,1);assert.equal(submitted[0].brief.name,'ล่าสุด');assert.deepEqual(submitted[0].ingredients,[{id:'upload-a',locked:true},{id:'upload-b',locked:false},{id:'upload-c',locked:false}]);assert.equal(completed[0].name,'ล่าสุด');
 });
 
 test('superseded submission is cancelled after receiving its ID and never displays its recipe',async()=>{

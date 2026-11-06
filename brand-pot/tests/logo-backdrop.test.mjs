@@ -18,12 +18,14 @@ test('invisible background RGB cannot outweigh the visible logo and no pixels ar
 test('auto scene uses the shared pixel decision, while explicit overrides remain authoritative',()=>{
   const recipe={schemaVersion:6,name:'Brand',logo:{src:'/api/assets/logo',width:100,height:100},customization:{...DEFAULT_BOARD_CUSTOMIZATION}};
   assert.equal(normalizeCustomization(recipe.customization).logoBackdrop,'auto');
-  for(const template of ['editorial','expressive','minimal']){
-    const automatic=buildBrandBoardScene({...recipe,design:{template}}, {}, {logoBackdrop:'dark'});
-    assert.equal(automatic.nodes.find(n=>n.id==='logo-panel').fill,LOGO_BACKDROPS.dark);
-    const explicit=buildBrandBoardScene({...recipe,customization:{...recipe.customization,logoBackdrop:'light'},design:{template}}, {}, {logoBackdrop:'dark'});
-    assert.equal(explicit.nodes.find(n=>n.id==='logo-panel').fill,LOGO_BACKDROPS.light);
-    for(const scene of [automatic,explicit])for(const node of scene.nodes.filter(n=>n.sourceRole==='logo')){assert.equal(node.assetRef,recipe.logo.src);assert.equal(node.adjustment,undefined);assert.equal(node.fit,'contain');}
+  for(const boardVariant of ['ai','minimal','professional','creative']){
+    const automatic=buildBrandBoardScene({...recipe,customization:{...recipe.customization,boardVariant}}, {}, {logoBackdrop:'dark'});
+    const explicit=buildBrandBoardScene({...recipe,customization:{...recipe.customization,boardVariant,logoBackdrop:'light'}}, {}, {logoBackdrop:'dark'});
+    for(const [scene,color] of [[automatic,LOGO_BACKDROPS.dark],[explicit,LOGO_BACKDROPS.light]])for(const node of scene.nodes.filter(n=>n.sourceRole==='logo')){
+      assert.equal(node.assetRef,recipe.logo.src);assert.equal(node.adjustment,undefined);assert.equal(node.fit,'contain');
+      const r=node.bounds,behind=scene.nodes.slice(0,scene.nodes.indexOf(node)).filter(n=>n.type==='rect'&&n.bounds.x<=r.x&&n.bounds.y<=r.y&&n.bounds.x+n.bounds.w>=r.x+r.w&&n.bounds.y+n.bounds.h>=r.y+r.h).at(-1);
+      assert.equal(behind?.fill,color,`${boardVariant}: actual backdrop behind ${node.id} honors source contrast`);
+    }
   }
 });
 test('browser pixel analysis is bounded and cached while preserving the requested source and aspect ratio',async()=>{

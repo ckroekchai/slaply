@@ -55,3 +55,4 @@
 }
 .customize-controls input[type=range]{accent-color:var(--brand-control-color,var(--accent))}
 @media(prefers-reduced-motion:reduce){.is-cooking .pot-assembly{animation:none}}
+.cooking-controls .chef-button{margin-bottom:10px;min-height:36px}

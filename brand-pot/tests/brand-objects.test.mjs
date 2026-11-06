@@ -14,8 +14,8 @@ test('three independent brand objects have app-owned atlas geometry and one safe
   assert.deepEqual(normalizeCustomization({objectStyles:BRAND_OBJECT_IDS}).objectStyles,BRAND_OBJECT_IDS);
 });
 test('all layouts document all three objects with their own names and reasons without clipping logos',()=>{
-  for(const template of ['editorial','expressive','minimal']){
-    const input=recipe();input.customization.layout=template;const scene=layoutBrandBoardText(buildBrandBoardScene(input)),svg=renderBrandBoardSVG(scene);
+  for(const template of ['ai','minimal','professional','creative']){
+    const input=recipe();input.customization.boardVariant=template;const scene=layoutBrandBoardText(buildBrandBoardScene(input)),svg=renderBrandBoardSVG(scene);
     for(const object of input.brandObjects){
       const node=scene.nodes.find(item=>item.id===`brand-${object.id}`);assert.equal(node.sourceRole,'brand-object');assert.equal(node.objectId,object.id);assert(svg.includes(object.name));
       const description=scene.nodes.find(item=>item.id===`brand-${object.id}-rationale`);assert.equal(description.lines.map(item=>item.text).join('').replace(/\s/g,''),object.rationale.replace(/\s/g,''));
@@ -27,7 +27,7 @@ test('all layouts document all three objects with their own names and reasons wi
   }
 });
 test('object selections control the pattern and social art while keeping the full family available',()=>{
-  const input=recipe();input.customization.objectStyles=['object-3'];input.customization.objectScale=70;
+  const input=recipe();input.customization.boardVariant='professional';input.customization.objectStyles=['object-3'];input.customization.objectScale=70;
   const scene=buildBrandBoardScene(input),decorative=scene.nodes.filter(item=>item.sourceRole==='brand-object'&&!item.id.startsWith('brand-object-'));
   assert(decorative.length>1);assert(decorative.every(item=>item.objectId==='object-3'));assert.equal(scene.brandObjects.length,3);
   const larger=buildBrandBoardScene({...input,customization:{...input.customization,objectScale:130}});assert(larger.nodes.find(x=>x.id==='social-artwork').bounds.w>scene.nodes.find(x=>x.id==='social-artwork').bounds.w);

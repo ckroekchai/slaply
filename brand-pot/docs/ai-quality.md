@@ -1,10 +1,12 @@
 # Slaply AI quality gate
 
-The Brand Pot is deployed as an **AI Beta** on `https://slaply.co`. A real Thai beverage generation has passed the automated API flow, including a generated image, exact supplied brand name, idempotent replay, save/reload, and owner isolation. This establishes a working integration for that case; it does not establish stable design quality across products. Payment integration remains deferred.
+The Brand Pot has historical **AI Beta** deployment evidence on `https://slaply.co`: a Thai beverage generation passed the automated API flow on 2026-11-04, including a generated image, exact supplied brand name, idempotent replay, save/reload and owner isolation. This establishes that earlier integration case, not deployment or paid validation of the v7 source changes. Payment integration remains deferred. See [Brand Guideline v7](brand-board-v7.md) for the current contract and focused local evidence.
 
 ## Input and interaction limits
 
-The requested input contract for the annotation revision is two to six JPG/PNG/WebP images, at most **5 MiB per image and 18 MiB combined**, with up to 40 million pixels per image. The aggregate limit must be checked before AI quota admission; originals remain immutable. Recipe deletion must use private recoverable trash and must not delete original images, generated assets, or the source job. A saved indicator must reflect the current content matching a server-confirmed saved version, including after edits made while saving.
+The current input contract is three to six JPG/PNG/WebP images, at most **5 MiB per image and 18 MiB combined**, with up to 40 million pixels per image. The aggregate limit must be checked before AI quota admission; originals remain immutable. New AI jobs start only from Shake, with automatic image-role recognition, preservation locks, optional global chef notes and per-ingredient notes. Local cutout may conservatively retain an uncertain original; it must not silently damage it. A saved indicator must reflect current content matching a server-confirmed saved version, including after edits made while saving.
+
+Recipe removal first uses private recoverable trash. Its separate permanent-delete action requires an owned trashed version and explicit UI confirmation; test this only on disposable QA data. Purging clears recipe content and suppresses automatic fallback restoration, while preserving shared original/generated assets and independent versions. No existing customer recipe may be used as an irreversible test fixture.
 
 The bill screen is a work/download summary during AI Beta; it must not submit a payment, buy credits, or imply a settled financial transaction. Animation checks include an observable cooking/pouring state plus a reduced-motion alternative. Slider colors must follow the requested styling while live artwork and exports keep the same color values.
 
@@ -57,15 +59,17 @@ The proposed broader quality gate is three independent generations for each of t
 
 Each output must pass all of these:
 
-- **Identity:** exact supplied name and readable Thai/English text. Original product pixels, proportions, and labels are unchanged.
-- **Direction:** concept and visible composition follow available inputs, the brief, and locked priorities. No invented factual product claims or copied reference logos.
+- **Identity:** exact supplied name and readable Thai/English text. Source files remain unchanged. Locked original identity retains colors, proportions and letterforms; a cutout changes only confident background alpha. An unlocked detected logo receives a coherent new design.
+- **Direction:** concept, all three distinct objects, the logo policy and visible composition follow the supplied ingredients and chef brief. Four board variants must differ structurally while retaining every guideline topic. No invented factual product claims or copied reference logos.
 - **Usability:** text, object selection/scale, hue, brightness, and saturation behave consistently in live view and export. Saving and reopening preserve the same approved state.
-- **Reliability:** failures are explicit, superseded jobs never overwrite the latest result, idempotent retries do not create a second job, and access remains isolated.
+- **Reliability:** failures are explicit, input edits never auto-generate, cancelled/stale cutout preparation cannot submit a late job, superseded jobs never overwrite the latest result, idempotent retries do not create a second job, purged recipes do not resurrect, and access remains isolated.
 - **Cost:** usage records include failed/superseded requests; acceptance limits are enforced on the server. No claim of refunds unless provider accounting confirms one.
 
 Block release for a privacy failure, credential disclosure, corrupted original, false factual claim, invalid persisted recipe, or repeatable live/export mismatch. A visual result that fails the brief requires prompt or renderer revision and rerunning the affected cases. Three repeated outputs per case are an initial consistency check, not a statistical guarantee.
 
-## Evidence status
+## Historical evidence status (2026-11-04)
+
+These records predate the v7 source changes. Use the v7 guide's validation method and actual new run reports for release acceptance; do not carry forward an earlier pass as evidence for a changed policy.
 
 - Evaluation matrix and guarded API runner: authored.
 - Runner syntax check: passed. Paid-mode opt-in guard: verified to reject before any network request when `RUN_PAID_EVAL` is absent.

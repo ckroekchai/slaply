@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {environment,call,start,png} from './backend-harness.mjs';
+import {environment,call,start,png,upload} from './backend-harness.mjs';
 import {hashBytes,day,now} from '../worker/core.mjs';
 
 const svg=new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><path d="M0 0H100V100H0Z" fill="#123456"/></svg>');
@@ -19,7 +19,7 @@ function converter(ctx,{fail=false,invalidHash=false,before}={}){
     return new Response(png,{headers:{'Content-Type':'image/png','Content-Length':String(png.length),'X-Conversion-Metadata':JSON.stringify(metadata)}});
   }};return {get calls(){return calls;}};
 }
-const jobBody=id=>({schemaVersion:6,idempotencyKey:crypto.randomUUID(),ingredients:[{id,role:'logo',locked:false}],brief:{name:'ทดสอบโลโก้',words:'แบรนด์ร่วมสมัย'}});
+const jobBody=async(ctx,cookie,id)=>{const extras=await Promise.all([upload(ctx,cookie),upload(ctx,cookie)]);return {schemaVersion:6,idempotencyKey:crypto.randomUUID(),ingredients:[{id,locked:true},...extras.map(x=>({id:x.id,locked:false}))],brief:{name:'ทดสอบโลโก้',words:'แบรนด์ร่วมสมัย'}};};
 
 test('document uploads are disabled by default and need both an explicit flag and converter binding',async()=>{
   for(const scenario of ['default','flag-only','binding-only','false-with-binding','boolean-true']){
@@ -59,7 +59,7 @@ test('failed conversion remains private, retains its reserved upload, and spends
   const ctx=environment(),cookie=await start(ctx),stub=converter(ctx,{fail:true}),before=(await call(ctx,'/api/session',{cookie})).data.remaining;
   const result=await uploadArtwork(ctx,cookie,pdf,'application/pdf','multi.pdf');assert.equal(result.status,422);assert.equal(result.data.error.code,'PDF_MULTIPAGE');assert.equal(stub.calls,1);const row=ctx.sql.prepare('SELECT * FROM brand_assets').get();assert.equal(row.state,'failed');assert.equal(row.render_r2_key,null);assert.deepEqual(ctx.storage.get(row.r2_key).body,pdf);
   for(const path of [`/api/assets/${row.id}`,`/api/assets/${row.id}/preview`])assert.equal((await call(ctx,path,{cookie})).status,404);
-  assert.equal((await call(ctx,'/api/jobs',{method:'POST',cookie,body:jobBody(row.id)})).status,404);assert.equal((await call(ctx,'/api/session',{cookie})).data.remaining,before);assert.equal(ctx.sql.prepare('SELECT COUNT(*) AS n FROM brand_jobs').get().n,0);
+  assert.equal((await call(ctx,'/api/jobs',{method:'POST',cookie,body:await jobBody(ctx,cookie,row.id)})).status,404);assert.equal((await call(ctx,'/api/session',{cookie})).data.remaining,before);assert.equal(ctx.sql.prepare('SELECT COUNT(*) AS n FROM brand_jobs').get().n,0);
 });
 
 test('forged conversion metadata and failed derivative storage never mark a source ready',async()=>{
@@ -78,8 +78,8 @@ test('concurrent final upload slot admits only one converter call and counts fai
 
 test('ready vectors enter jobs without raster inspection and cannot cross session ownership',async()=>{
   const ctx=environment(),cookie=await start(ctx),other=await start(ctx);converter(ctx);const uploaded=await uploadArtwork(ctx,cookie),id=uploaded.data.id;
-  const job=await call(ctx,'/api/jobs',{method:'POST',cookie,body:jobBody(id)});assert.equal(job.status,202,JSON.stringify(job.data));assert.equal((await call(ctx,'/api/jobs',{method:'POST',cookie:other,body:jobBody(id)})).status,404);
-  ctx.sql.prepare('UPDATE brand_assets SET render_sha256=NULL WHERE id=?').run(id);assert.equal((await call(ctx,'/api/jobs',{method:'POST',cookie,body:jobBody(id)})).status,404,'Incomplete vector metadata cannot be backfilled by pretending it is a raster');
+  const job=await call(ctx,'/api/jobs',{method:'POST',cookie,body:await jobBody(ctx,cookie,id)});assert.equal(job.status,202,JSON.stringify(job.data));assert.equal((await call(ctx,'/api/jobs',{method:'POST',cookie:other,body:await jobBody(ctx,cookie,id)})).status,404);
+  ctx.sql.prepare('UPDATE brand_assets SET render_sha256=NULL WHERE id=?').run(id);assert.equal((await call(ctx,'/api/jobs',{method:'POST',cookie,body:await jobBody(ctx,cookie,id)})).status,404,'Incomplete vector metadata cannot be backfilled by pretending it is a raster');
 });
 
 test('raster magic retains its existing inline URL without calling the converter',async()=>{

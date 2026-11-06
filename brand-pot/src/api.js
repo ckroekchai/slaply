@@ -23,7 +23,7 @@ export function normalizeRecipe(recipe = {}) {
 }
 
 // Publish one complete hydration snapshot. Exposing session readiness before the
-// recipe request finishes can trigger automatic cooking during restoration.
+// recipe request finishes can reveal an incomplete input table during restoration.
 export async function loadKitchenSession(request = apiRequest, storedJobId = null) {
   const session = await request('/api/session');
   const saved = await request('/api/recipes');
