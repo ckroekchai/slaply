@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, BookmarkSimple, DownloadSimple, FileCode, FileText, Flask, Image, Sparkle, Trash, ArrowCounterClockwise, Check, X } from '@phosphor-icons/react';
 import './studio-panels.css';
 import { asset } from './assets.js';
+import { trialQuota } from './trial-quota.js';
 
 const TITLES = { system: 'ปรุงแบรนด์ด้วย AI', export: 'เช็คบิล', recipes: 'สูตรที่เป็นคุณ', chef: 'อธิบายเชฟ' };
 const KICKERS = { system: 'SLAPLY AI BETA', export: 'YOUR BRANDING GUIDELINE', recipes: 'YOUR RECIPE BOOK', chef: 'A NOTE TO THE CHEF' };
@@ -38,7 +39,7 @@ export default function StudioPanels({ panel, onClose, session, recipe = {}, onE
   };
   const name = recipe.name || 'แบรนด์ของคุณ';
   const shownRecipes = recipeView === 'trash' ? trashedRecipes : recipes;
-  const remaining = session ? Math.min(session.remaining, session.globalRemaining) : '…';
+  const trial = trialQuota(session);
   return <div className="sp-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
     <section className={`sp-dialog sp-dialog--${panel}`} role="dialog" aria-modal="true" aria-labelledby="sp-dialog-title" ref={dialogRef} tabIndex={-1}>
       <button className="sp-close" aria-label="ปิดหน้าต่าง" onClick={onClose} data-panel-close><X size={22}/></button>
@@ -50,14 +51,14 @@ export default function StudioPanels({ panel, onClose, session, recipe = {}, onE
         <div className="sp-chef-bottom"><p>เขียนหรือแก้ได้โดยไม่เริ่ม Gen · พร้อมแล้วกด Shake my brand ที่หน้าหม้อ</p><button className="sp-button sp-button--mint" onClick={onClose}>กลับไปปรุง<ArrowRight size={17}/></button></div>
       </div>}
       {panel === 'system' && <div className="sp-system-content">
-        <div className="sp-system-stats"><div><span>รอบทดลองที่เหลือวันนี้</span><strong>{remaining}<Sparkle size={25}/></strong></div><div><span>ทิศทางในครั้งนี้</span><strong>{history.length}<Flask size={25}/></strong></div><div><span>สูตรที่เก็บไว้</span><strong>{recipes.length}<BookmarkSimple size={25}/></strong></div></div>
+        <div className="sp-system-stats"><div><span>{trial.unlimited ? 'ทดลองไม่จำกัดจำนวนรอบ' : 'รอบทดลองที่เหลือวันนี้'}</span><strong>{trial.count}<Sparkle size={25}/></strong></div><div><span>ทิศทางในครั้งนี้</span><strong>{history.length}<Flask size={25}/></strong></div><div><span>สูตรที่เก็บไว้</span><strong>{recipes.length}<BookmarkSimple size={25}/></strong></div></div>
         <ol className="sp-pipeline">{[
           { title: 'ผสมวัตถุดิบ 3–6 ภาพ', description: 'AI อ่านภาพและแยกประเภทให้เอง ล็อกภาพที่ต้องการรักษาต้นฉบับ แล้วเติมความต้องการในอธิบายเชฟ ภาพและคำบรรยายจะถูกส่งให้ OpenAI เพื่อประมวลผล', icon: Image },
           { title: 'AI คิดคอนเซปต์และสร้างภาพ', description: 'กด Shake เพื่อเริ่ม AI จะอ่านวัตถุดิบและคำอธิบาย แล้วออกแบบแบรนด์พร้อม Object 3 แบบ ภาพที่ล็อกจะรักษาต้นฉบับและแยกพื้นหลังเมื่อทำได้อย่างมั่นใจ ส่วนภาพที่ไม่ล็อกใช้เป็นแรงบันดาลใจในการออกแบบใหม่', icon: Flask },
           { title: 'ปรับให้เป็นคุณ', description: 'ปรับชื่อ ข้อความ สี และขนาดได้โดยไม่ต้องสร้างภาพใหม่ กด Shake เมื่อต้องการคอนเซปต์และภาพใหม่อีกครั้ง', icon: Sparkle },
           { title: 'เก็บสูตรและดาวน์โหลด', description: 'สูตรและไฟล์เก็บบน Slaply โดยเชื่อมกับเบราว์เซอร์นี้ ดาวน์โหลด JSON หรือ HTML เพื่อเก็บสำเนาของคุณ', icon: DownloadSimple },
         ].map(step => <li key={step.title}><step.icon size={24}/><div><h3>{step.title}</h3><p>{step.description}</p></div></li>)}</ol>
-        <p className="sp-footnote">ช่วง AI Beta ทดลองฟรี มีจำนวนรอบต่อวันเพื่อรักษาความพร้อมของระบบ งานที่เริ่มประมวลผลแล้วอาจนับรอบแม้คุณเปลี่ยนวัตถุดิบหรือกดหยุด ยังไม่มีการเรียกเก็บเงิน</p>
+        <p className="sp-footnote">{trial.unlimited ? 'เบราว์เซอร์นี้เปิดโหมดทดลองไม่จำกัดจำนวนรอบ ปรับวัตถุดิบแล้วกด Shake เพื่อทดลองต่อได้ โหมดนี้ผูกกับเบราว์เซอร์ปัจจุบัน' : 'ช่วง AI Beta ทดลองฟรี มีจำนวนรอบต่อวันเพื่อรักษาความพร้อมของระบบ งานที่เริ่มประมวลผลแล้วอาจนับรอบแม้คุณเปลี่ยนวัตถุดิบหรือกดหยุด ยังไม่มีการเรียกเก็บเงิน'}</p>
         {history.length > 0 && <div className="sp-history-section"><h3>ทิศทางล่าสุด</h3><div className="sp-history-list">{history.map(item => <button key={item.id} onClick={() => { onRestore(item); onClose(); }}><img src={asset(item.generatedImage || item.productImage)} alt=""/><span><strong>{item.name}</strong><small>{item.concept?.title}</small></span><ArrowRight size={17}/></button>)}</div></div>}
       </div>}
       {panel === 'export' && <div className="sp-bill-content">
