@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import { handleApi } from '../worker/api.mjs';
 import { MAX_UPLOAD_BYTES,MAX_JOB_UPLOAD_BYTES,sniffImage,validateJob,validateAnalysis,analysisDiagnostics,savedRecipe,sessionCookie,buildRecipe,providerError,hash,day,now } from '../worker/core.mjs';
 import { captureStageFailure, publicJobFailure } from '../worker/failures.mjs';
@@ -73,14 +74,14 @@ test('cross-owner job inputs, reads, cancellation and saves return 404',async()=
 test('malformed and overlarge aggregate inputs do not spend quota',async()=>{
   const ctx=environment(),cookie=await start(ctx),base=await inputs(ctx,cookie);
   assert.equal((await call(ctx,'/api/jobs',{method:'POST',cookie,body:requestBody({...base,ingredients:[base.ingredients[0]]})})).status,400);
-  for(let i=0;i<2;i++){const extra=await upload(ctx,cookie,`extra-${i}.png`);base.ingredients.push({id:extra.id,locked:false});}
+  for(let i=0;i<1;i++){const extra=await upload(ctx,cookie,`extra-${i}.png`);base.ingredients.push({id:extra.id,locked:false});}
   ctx.sql.prepare('UPDATE brand_assets SET bytes = ?').run(5*1024*1024);
   const result=await call(ctx,'/api/jobs',{method:'POST',cookie,body:requestBody(base)});assert.equal(result.data.error.code,'INPUT_TOTAL_TOO_LARGE');assert.equal(ctx.sql.prepare('SELECT count(*) AS n FROM brand_jobs').get().n,0);assert.equal(ctx.created,0);
 });
 test('aggregate admission accepts exactly 18 MiB and rejects one byte over before another quota reservation',async()=>{
   assert.equal(MAX_UPLOAD_BYTES,5*1024*1024);assert.equal(MAX_JOB_UPLOAD_BYTES,18*1024*1024);
   const ctx=environment(),cookie=await start(ctx),base=await inputs(ctx,cookie);
-  for(let i=0;i<2;i++){const extra=await upload(ctx,cookie,`extra-${i}.png`);base.ingredients.push({id:extra.id,locked:false});}
+  for(let i=0;i<1;i++){const extra=await upload(ctx,cookie,`extra-${i}.png`);base.ingredients.push({id:extra.id,locked:false});}
   const sizes=[5,5,5,3].map(v=>v*1024*1024);
   base.ingredients.forEach((item,index)=>ctx.sql.prepare('UPDATE brand_assets SET bytes=? WHERE id=?').run(sizes[index],item.id));
   const exact=await call(ctx,'/api/jobs',{method:'POST',cookie,body:requestBody(base)});assert.equal(exact.status,202);
@@ -178,5 +179,64 @@ test('idempotency of pre-v6 requests survives the new role normalization',async(
   const legacyHash=await hash(JSON.stringify({ingredients:body.ingredients,brief:body.brief}));
   ctx.sql.prepare('UPDATE brand_jobs SET request_hash=?,input_json=? WHERE id=?').run(legacyHash,JSON.stringify(body),first.data.id);
   const replay=await call(ctx,'/api/jobs',{method:'POST',cookie,body});assert.equal(replay.status,200);assert.equal(replay.data.id,first.data.id);assert.equal(ctx.created,1);
-  const changed=await call(ctx,'/api/jobs',{method:'POST',cookie,body:{...body,ingredients:body.ingredients.map((item,i)=>({...item,role:i===0?'logo':'reference'}))}});assert.equal(changed.status,409);
+  const changed=await call(ctx,'/api/jobs',{method:'POST',cookie,body:{...body,ingredients:body.ingredients.map((item,i)=>({...item,role:i===0?'logo':'reference'}))}});assert.equal(changed.status,200,'Legacy role hints do not override AI detection or change normalized intent');
+});
+
+test('permanent deletion is trash-only, owner-only and unrecoverable through all recipe entry points',async()=>{
+  const ctx=environment(),owner=await start(ctx),other=await start(ctx),recipe=await completedRecipe(ctx,owner),path=`/api/recipes/${recipe.id}`;
+  const assets=ctx.storage.size;
+  assert.equal((await call(ctx,path+'/permanent',{method:'DELETE',cookie:owner})).data.error.code,'RECIPE_NOT_TRASHED');
+  await call(ctx,path,{method:'DELETE',cookie:owner});
+  assert.equal((await call(ctx,path+'/permanent',{method:'DELETE',cookie:other})).status,404);
+  const cross=await handleApi(new Request(origin+path+'/permanent',{method:'DELETE',headers:{Cookie:owner,Origin:'https://evil.test'}}),ctx.env);assert.equal(cross.status,403);
+  const result=await call(ctx,path+'/permanent',{method:'DELETE',cookie:owner});assert.equal(result.status,200);assert.deepEqual(result.data,{id:recipe.id,permanentlyDeleted:true,sourcePurged:true});
+  for(const endpoint of ['/api/recipes','/api/recipes?trash=1'])assert.deepEqual((await call(ctx,endpoint,{cookie:owner})).data.recipes,[]);
+  assert.equal((await call(ctx,path+'/restore',{method:'POST',cookie:owner,body:{}})).status,404);
+  assert.equal((await call(ctx,path+'/permanent',{method:'DELETE',cookie:owner})).status,404);
+  assert.equal((await call(ctx,'/api/session',{cookie:owner})).data.latestRecipe,null);
+  assert.equal((await call(ctx,`/api/jobs/${recipe.jobId}`,{cookie:owner})).data.recipe,null);
+  assert.equal((await call(ctx,'/api/recipes',{method:'POST',cookie:owner,body:{recipe}})).status,409);
+  const tombstone=ctx.sql.prepare('SELECT recipe_json,purged_at FROM brand_recipes WHERE id=?').get(recipe.id);assert.equal(tombstone.recipe_json,'null');assert(tombstone.purged_at);assert.equal(ctx.storage.size,assets);
+});
+
+test('purging one saved version preserves another version and all shared originals',async()=>{
+  const ctx=environment(),cookie=await start(ctx),first=await completedRecipe(ctx,cookie);
+  const saved=await call(ctx,'/api/recipes',{method:'POST',cookie,body:{recipe:{...first,concept:{title:'อีกเวอร์ชัน',summary:'ข้อความอีกชุด'},customization:{boardVariant:'creative',objectScale:120}}}});assert.equal(saved.status,201);const second=saved.data.recipe;
+  await call(ctx,`/api/recipes/${first.id}`,{method:'DELETE',cookie});const firstPurge=await call(ctx,`/api/recipes/${first.id}/permanent`,{method:'DELETE',cookie});assert.equal(firstPurge.status,200);assert.equal(firstPurge.data.sourcePurged,false);
+  const current=(await call(ctx,'/api/recipes',{cookie})).data.recipes;assert.deepEqual(current.map(r=>r.id),[second.id]);assert.equal(current[0].customization.boardVariant,'creative');assert.equal((await call(ctx,'/api/session',{cookie})).data.latestRecipe.id,second.id);
+  assert((await call(ctx,`/api/jobs/${first.jobId}`,{cookie})).data.recipe);assert.deepEqual((await call(ctx,first.ingredients[0].src,{cookie})).data,png);
+  await call(ctx,`/api/recipes/${second.id}`,{method:'DELETE',cookie});const lastPurge=await call(ctx,`/api/recipes/${second.id}/permanent`,{method:'DELETE',cookie});assert.equal(lastPurge.status,200);assert.equal(lastPurge.data.sourcePurged,true);assert.equal((await call(ctx,`/api/jobs/${first.jobId}`,{cookie})).data.recipe,null);
+});
+
+test('cutout admission validates owner dimensions MIME lock and bounds before quota',async()=>{
+  const ctx=environment(),cookie=await start(ctx),other=await start(ctx),base=await inputs(ctx,cookie),cutout=await upload(ctx,cookie),foreign=await upload(ctx,other);
+  const derived=(id,bounds={x:0,y:0,w:1,h:1})=>({...base,ingredients:base.ingredients.map((x,i)=>i?x:{...x,cutoutId:id,cutoutStatus:'removed',cutoutBounds:bounds})});
+  assert.equal((await call(ctx,'/api/jobs',{method:'POST',cookie,body:requestBody(derived(foreign.id))})).status,404);
+  ctx.sql.prepare('UPDATE brand_assets SET width=2 WHERE id=?').run(cutout.id);
+  assert.equal((await call(ctx,'/api/jobs',{method:'POST',cookie,body:requestBody(derived(cutout.id))})).status,404);
+  ctx.sql.prepare('UPDATE brand_assets SET width=1,mime=? WHERE id=?').run('image/jpeg',cutout.id);
+  assert.equal((await call(ctx,'/api/jobs',{method:'POST',cookie,body:requestBody(derived(cutout.id))})).status,404);
+  ctx.sql.prepare('UPDATE brand_assets SET mime=? WHERE id=?').run('image/png',cutout.id);
+  assert.equal((await call(ctx,'/api/jobs',{method:'POST',cookie,body:requestBody(derived(cutout.id,{x:.9,y:0,w:.5,h:1}))})).status,400);
+  const unlocked=derived(cutout.id);unlocked.ingredients[0].locked=false;assert.equal((await call(ctx,'/api/jobs',{method:'POST',cookie,body:requestBody(unlocked)})).status,400);
+  assert.equal(ctx.created,0);assert.equal((await call(ctx,'/api/jobs',{method:'POST',cookie,body:requestBody(derived(cutout.id))})).status,202);
+});
+
+test('chef notes and lock intent participate in idempotency with bounded validation',async()=>{
+  const ctx=environment(),cookie=await start(ctx),base=await inputs(ctx,cookie);base.brief.chefNotes='ใช้ใบไม้เป็นบุคลิก';base.ingredients[0].notes='โลโก้เดิมของร้าน';
+  const body=requestBody(base),first=await call(ctx,'/api/jobs',{method:'POST',cookie,body});assert.equal(first.status,202);
+  const stored=JSON.parse(ctx.sql.prepare('SELECT input_json FROM brand_jobs WHERE id=?').get(first.data.id).input_json);assert.equal(stored.brief.chefNotes,base.brief.chefNotes);assert.equal(stored.ingredients[0].notes,base.ingredients[0].notes);assert.equal(stored.ingredients[0].role,'auto');
+  for(const changed of [{...body,brief:{...body.brief,chefNotes:'เปลี่ยนคำสั่ง'}},{...body,ingredients:body.ingredients.map((x,i)=>i?x:{...x,locked:false})}])assert.equal((await call(ctx,'/api/jobs',{method:'POST',cookie,body:changed})).status,409);
+  for(const changed of [{...base,brief:{...base.brief,chefNotes:'a'.repeat(2001)}},{...base,ingredients:base.ingredients.map((x,i)=>i?x:{...x,notes:'a'.repeat(301)})}])assert.equal((await call(ctx,'/api/jobs',{method:'POST',cookie,body:requestBody(changed)})).status,400);
+});
+
+
+test('same-source WebP can retain transparency but a distinct non-PNG derivative is rejected',async()=>{
+  const ctx=environment(),cookie=await start(ctx),base=await inputs(ctx,cookie),bytes=new Uint8Array(readFileSync(new URL('./backend-fixtures/static.webp',import.meta.url)));
+  const send=()=>call(ctx,'/api/uploads',{method:'POST',cookie,body:bytes,headers:{'Content-Type':'image/webp','X-File-Name':'transparent.webp'}});
+  const first=await send(),second=await send();assert.equal(first.status,201);assert.equal(second.status,201);
+  base.ingredients[0]={id:first.data.id,locked:true,cutoutId:first.data.id,cutoutStatus:'transparent',cutoutBounds:{x:0,y:0,w:1,h:1}};
+  assert.equal((await call(ctx,'/api/jobs',{method:'POST',cookie,body:requestBody(base)})).status,202);
+  base.ingredients[0].cutoutId=second.data.id;assert.equal((await call(ctx,'/api/jobs',{method:'POST',cookie,body:requestBody(base)})).status,404);
+  assert.equal(ctx.created,1);
 });

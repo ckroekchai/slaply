@@ -18,7 +18,7 @@ function provider({analysis=analysisV6,image=generatedPng,onImage}={}){
   const calls=[];
   return {calls,async fetch(url,options){assert.match(url,/^https:\/\/api\.openai\.com\/v1\//);const payload=JSON.parse(options.body);calls.push({url,payload});if(url.endsWith('/responses')){const count=JSON.parse(payload.input[0].content[0].text).ingredientCount;return response({output:[{content:[{type:'output_text',text:JSON.stringify({...analysis,observations:analysis.observations.slice(0,count)})}]}],usage:visionUsage});}await onImage?.();return response({data:[{b64_json:Buffer.from(image).toString('base64')}],usage:imageUsage});}};
 }
-async function submitted(){const ctx=environment(),cookie=await start(ctx),logo=await upload(ctx,cookie,'customer-logo.png');const result=await call(ctx,'/api/jobs',{method:'POST',cookie,body:{schemaVersion:6,idempotencyKey:crypto.randomUUID(),ingredients:[{id:logo.id,role:'logo',locked:false}],brief:{name:'ทดสอบแบรนด์',words:'ร้านงานออกแบบร่วมสมัย เรียบง่ายและอบอุ่น'}}});assert.equal(result.status,202,JSON.stringify(result.data));return {...ctx,cookie,logo,id:result.data.id};}
+async function submitted({locked=true,notes='',chefNotes=''}={}){const ctx=environment(),cookie=await start(ctx),logo=await upload(ctx,cookie,'customer-logo.png'),extras=await Promise.all([upload(ctx,cookie,'reference.png'),upload(ctx,cookie,'product.png')]);const result=await call(ctx,'/api/jobs',{method:'POST',cookie,body:{schemaVersion:6,idempotencyKey:crypto.randomUUID(),ingredients:[{id:logo.id,role:'reference',locked,notes},...extras.map(x=>({id:x.id,locked:false}))],brief:{name:'ทดสอบแบรนด์',words:'ร้านงานออกแบบร่วมสมัย เรียบง่ายและอบอุ่น',chefNotes}}});assert.equal(result.status,202,JSON.stringify(result.data));return {...ctx,cookie,logo,id:result.data.id};}
 async function execute(ctx,stub){const old=globalThis.fetch;globalThis.fetch=stub.fetch.bind(stub);try{return await new BrandGenerationWorkflow({},ctx.env).run({payload:{jobId:ctx.id}},step());}finally{globalThis.fetch=old;}}
 const stored=ctx=>ctx.sql.prepare('SELECT * FROM brand_jobs WHERE id=?').get(ctx.id);
 
@@ -41,7 +41,7 @@ test('failed vector conversion stops before any paid AI request',async()=>{
   const stub=provider();assert.equal((await execute(ctx,stub)).status,'failed');assert.equal(stub.calls.length,0);assert.equal(stored(ctx).error_code,'PDF_MULTIPAGE');
 });
 
-test('actual Workflow.run takes one logo and brief through both providers to a complete v6 recipe',async()=>{
+test('actual Workflow.run classifies three ingredients and preserves the locked logo through both providers to a complete v6 recipe',async()=>{
   const ctx=await submitted(),stub=provider(),original=ctx.storage.values().next().value.body.slice();
   const outcome=await execute(ctx,stub);assert.equal(outcome.status,'ready');assert.equal(stub.calls.length,2);
   const [vision,image]=stub.calls.map(call=>call.payload);assert.equal(vision.model,'gpt-6-luna');assert.equal(vision.store,false);assert.equal(vision.text.format.strict,true);
@@ -70,16 +70,43 @@ test('new generation rejects missing, duplicated or unbranded object plans befor
 
 test('saved object selections persist while original AI object concepts and geometry cannot be forged',async()=>{
   const ctx=await submitted();await execute(ctx,provider());const recipe=JSON.parse(stored(ctx).recipe_json);
-  const response=await call(ctx,'/api/recipes',{method:'POST',cookie:ctx.cookie,body:{recipe:{...recipe,brandObjects:[{id:'object-1',src:'https://evil.test/other',crop:{x:-5,y:0,w:8,h:9}}],customization:{...recipe.customization,objectStyles:['object-2'],objectScale:115}}}});
-  assert.equal(response.status,201);assert.deepEqual(response.data.recipe.brandObjects,recipe.brandObjects);assert.deepEqual(response.data.recipe.customization.objectStyles,['object-2']);assert.equal(response.data.recipe.customization.objectScale,115);
+  const response=await call(ctx,'/api/recipes',{method:'POST',cookie:ctx.cookie,body:{recipe:{...recipe,logo:{src:'https://evil.test/forged',generated:true},brandObjects:[{id:'object-1',src:'https://evil.test/other',crop:{x:-5,y:0,w:8,h:9}}],customization:{...recipe.customization,objectStyles:['object-2'],objectScale:115}}}});
+  assert.equal(response.status,201);assert.deepEqual(response.data.recipe.logo,recipe.logo);assert.deepEqual(response.data.recipe.brandObjects,recipe.brandObjects);assert.deepEqual(response.data.recipe.customization.objectStyles,['object-2']);assert.equal(response.data.recipe.customization.objectScale,115);
   const restored=await call(ctx,'/api/recipes',{cookie:ctx.cookie});assert.deepEqual(restored.data.recipes[0].brandObjects,recipe.brandObjects);assert.deepEqual(restored.data.recipes[0].customization.objectStyles,['object-2']);
 });
 
-test('logo role is independent of priority locks and is included in idempotency identity',async()=>{
-  const ctx=environment(),cookie=await start(ctx),logo=await upload(ctx,cookie),ref=await upload(ctx,cookie);const body={schemaVersion:6,idempotencyKey:crypto.randomUUID(),ingredients:[{id:ref.id,role:'reference',locked:true},{id:logo.id,role:'logo',locked:false}],brief:{name:'ทดสอบแบรนด์',words:'ออกแบบตามโลโก้'}};
-  const created=await call(ctx,'/api/jobs',{method:'POST',cookie,body});assert.equal(created.status,202);ctx.id=created.data.id;
-  const conflict=await call(ctx,'/api/jobs',{method:'POST',cookie,body:{...body,ingredients:body.ingredients.map(x=>({...x,role:'reference'}))}});assert.equal(conflict.status,409);
-  await execute(ctx,provider());const recipe=JSON.parse(stored(ctx).recipe_json);assert.equal(recipe.logo.assetId,logo.id);assert.equal(recipe.productImage,logo.url);assert.equal(recipe.referenceImage,ref.url);
+test('vision roles override manual hints and a locked reference cannot freeze an unlocked logo',async()=>{
+  const ctx=await submitted({locked:false,notes:'เป็นต้นแบบสำหรับออกแบบใหม่',chefNotes:'เน้นความคล่องตัว'}),row=stored(ctx),input=JSON.parse(row.input_json);
+  input.ingredients[1].locked=true;
+  ctx.sql.prepare('UPDATE brand_jobs SET input_json=? WHERE id=?').run(JSON.stringify(input),ctx.id);
+  const stub=provider();assert.equal((await execute(ctx,stub)).status,'ready');
+  const recipe=JSON.parse(stored(ctx).recipe_json),[vision,image]=stub.calls.map(x=>x.payload);
+  assert.equal(recipe.ingredients[0].role,'logo');assert.equal(recipe.ingredients[1].role,'reference');
+  assert.equal(recipe.logo.generated,true);assert.equal(recipe.logo.preserveOriginal,false);assert.equal(recipe.logo.originalAssetId,ctx.logo.id);assert.equal(recipe.logo.src,recipe.generatedImage);assert.deepEqual(recipe.logo.crop,{x:.5,y:.5,w:.5,h:.5});
+  assert.equal(recipe.brandObjects.length,3);assert.equal(recipe.identity.mode,'generated');
+  assert.match(image.prompt,/BOTTOM RIGHT quadrant.*ONE NEW original brand identity symbol/);assert.match(image.prompt,/logo SYMBOL ONLY: no letters/);
+  assert(image.prompt.includes(analysisV6.identity.visual));
+  const visionData=JSON.parse(vision.input[0].content[0].text);assert.equal(visionData.brief.chefNotes,'เน้นความคล่องตัว');assert.equal(visionData.ingredients[0].notes,'เป็นต้นแบบสำหรับออกแบบใหม่');assert(visionData.ingredients.every(i=>i.classification==='infer-from-image'&&!Object.hasOwn(i,'role')));
+  assert.deepEqual((await call(ctx,ctx.logo.url,{cookie:ctx.cookie})).data,png,'Source pixels remain intact even when redesign is requested');
+});
+
+test('locked detected logo uses only its owned cutout and keeps the original source separately',async()=>{
+  const ctx=await submitted(),derivative=await upload(ctx,ctx.cookie,'logo-cutout.png'),row=stored(ctx),input=JSON.parse(row.input_json);
+  Object.assign(input.ingredients[0],{cutoutId:derivative.id,cutoutStatus:'removed',cutoutBounds:{x:.1,y:.15,w:.8,h:.7}});
+  ctx.sql.prepare('UPDATE brand_jobs SET input_json=? WHERE id=?').run(JSON.stringify(input),ctx.id);
+  const stub=provider();assert.equal((await execute(ctx,stub)).status,'ready');const recipe=JSON.parse(stored(ctx).recipe_json);
+  assert.equal(recipe.logo.generated,false);assert.equal(recipe.logo.cutout,true);assert.equal(recipe.logo.src,derivative.url);assert.equal(recipe.logo.originalSrc,ctx.logo.url);assert.equal(recipe.logo.sha256,await hashBytes(png));assert.deepEqual(recipe.logo.contentBounds,input.ingredients[0].cutoutBounds);
+  assert.match(stub.calls[1].payload.prompt,/BOTTOM RIGHT quadrant: entirely empty/);assert.equal(recipe.brandObjects.length,3);
+});
+
+test('no detected logo produces a new identity while all three objects remain distinct',async()=>{
+  const ctx=await submitted(),withoutLogo=structuredClone(analysisV6);withoutLogo.identity.ingredientIndex=0;withoutLogo.observations[0].role='reference';
+  const stub=provider({analysis:withoutLogo});assert.equal((await execute(ctx,stub)).status,'ready');const recipe=JSON.parse(stored(ctx).recipe_json);
+  assert.equal(recipe.logo.generated,true);assert.equal(recipe.logo.originalAssetId,undefined);assert.equal(recipe.brandObjects.length,3);assert.match(stub.calls[1].payload.prompt,/ONE NEW original brand identity symbol/);
+});
+
+test('missing automatic role or identity plan fails before spending an image request',async()=>{
+  for(const alter of [a=>delete a.identity,a=>delete a.observations[0].role]){const ctx=await submitted(),bad=structuredClone(analysisV6);alter(bad);const stub=provider({analysis:bad});assert.equal((await execute(ctx,stub)).status,'failed');assert.equal(stub.calls.length,1);assert.equal(stored(ctx).error_code,'AI_INVALID_OUTPUT');}
 });
 
 test('provider 401 survives the workflow step boundary with no fallback model or image charge',async()=>{
@@ -114,17 +141,16 @@ test('a cached pre-v6 analysis resumes with material artwork without repeating p
   const cachedStep={async do(name,options,callback){if(name==='understand-brand-ingredients')return structuredClone(analysis);return durableStep.do(name,options,callback);}};
   const outcome=await runBrandGeneration(ctx.env,{payload:{jobId:ctx.id}},cachedStep,{fetch:stub.fetch.bind(stub)});
   assert.equal(outcome.status,'ready');assert.equal(stub.calls.length,1);assert.match(stub.calls[0].url,/\/images\/generations$/);assert.match(stub.calls[0].payload.prompt,/Selected visual treatment: material/);
-  const recipe=JSON.parse(stored(ctx).recipe_json);assert.equal(recipe.schemaVersion,5);assert.equal(recipe.design,undefined);assert.equal(recipe.name,'ทดสอบแบรนด์');assert.equal(recipe.ai.promptVersion,'brand-guideline-2026-11-05.3');
+  const recipe=JSON.parse(stored(ctx).recipe_json);assert.equal(recipe.schemaVersion,5);assert.equal(recipe.design,undefined);assert.equal(recipe.name,'ทดสอบแบรนด์');assert.equal(recipe.ai.promptVersion,'brand-guideline-2026-11-06.1');
 });
 
-test('logo admission and v6 schema reject invalid roles, incomplete systems and invented design values',()=>{
-  const id=crypto.randomUUID(),base={schemaVersion:6,idempotencyKey:crypto.randomUUID(),ingredients:[{id,role:'logo'}],brief:{words:'Brief'}};
-  assert.equal(validateJob(base).ingredients[0].role,'logo');
-  for(const changed of [{...base,ingredients:[{id,role:'reference'}]},{...base,brief:{words:''}},{...base,ingredients:[{id,role:'logo'},{id:crypto.randomUUID(),role:'logo'}]},{...base,ingredients:[{id,role:'script'}]}])assert.throws(()=>validateJob(changed),error=>error.code==='INVALID_INPUT');
-  assert.equal(validateAnalysis({...analysisV6,observations:[analysisV6.observations[0]]},1,'Name',6).schemaVersion,6);
-  assert.throws(()=>validateAnalysis({...analysisV6,brandSystem:{...analysisV6.brandSystem,palette:analysisV6.brandSystem.palette.slice(0,4)}},2,'Name',6));
-  assert.throws(()=>validateAnalysis({...analysisV6,observations:[null,null]},2,'Name',6),error=>error.code==='AI_INVALID_OUTPUT');
-  assert.deepEqual(normalizeCustomization({logoScale:1000,layout:'bad',fontPair:'https://evil',logoBackdrop:'red'}),{...normalizeCustomization(),logoScale:115,layout:'auto',fontPair:'auto',logoBackdrop:'auto'});
+test('three-ingredient admission and v6 schema reject invalid roles and incomplete identity',()=>{
+  const base={schemaVersion:6,idempotencyKey:crypto.randomUUID(),ingredients:Array.from({length:3},()=>({id:crypto.randomUUID(),role:'logo'})),brief:{words:'Brief'}};
+  assert.deepEqual(validateJob(base).ingredients.map(x=>x.role),['auto','auto','auto']);
+  for(const changed of [{...base,ingredients:base.ingredients.slice(0,1)},{...base,ingredients:base.ingredients.slice(0,2)},{...base,ingredients:base.ingredients.map((x,i)=>({...x,role:i?'logo':'script'}))}])assert.throws(()=>validateJob(changed),error=>error.code==='INVALID_INPUT');
+  assert.equal(validateAnalysis(analysisV6,3,'Name',6,true,true).schemaVersion,6);
+  for(const altered of [{...analysisV6,identity:null},{...analysisV6,identity:{...analysisV6.identity,ingredientIndex:2}},{...analysisV6,observations:analysisV6.observations.map(o=>({...o,role:'auto'}))},{...analysisV6,brandSystem:{...analysisV6.brandSystem,palette:analysisV6.brandSystem.palette.slice(0,4)}}])assert.throws(()=>validateAnalysis(altered,3,'Name',6,true,true),error=>error.code==='AI_INVALID_OUTPUT');
+  assert.deepEqual(normalizeCustomization({logoScale:1000,layout:'bad',fontPair:'https://evil',logoBackdrop:'red',boardVariant:'bad'}),{...normalizeCustomization(),logoScale:115,layout:'auto',fontPair:'auto',logoBackdrop:'auto',boardVariant:'ai'});
 });
 
 test('AI-proposed original name remains trusted when the editable name is later changed',async()=>{
@@ -132,4 +158,16 @@ test('AI-proposed original name remains trusted when the editable name is later 
   ctx.sql.prepare('UPDATE brand_jobs SET input_json=? WHERE id=?').run(JSON.stringify(input),ctx.id);
   await execute(ctx,provider());const recipe=JSON.parse(stored(ctx).recipe_json);assert.equal(recipe.name,analysisV6.proposedName);assert.equal(recipe.sourceName,analysisV6.proposedName);
   const saved=await call(ctx,'/api/recipes',{method:'POST',cookie:ctx.cookie,body:{recipe:{...recipe,name:'ชื่อที่แก้ใหม่',sourceName:'forged'}}});assert.equal(saved.status,201);assert.equal(saved.data.recipe.name,'ชื่อที่แก้ใหม่');assert.equal(saved.data.recipe.sourceName,analysisV6.proposedName);
+});
+
+
+test('cached legacy v6 analysis preserves old identity and does not repeat paid vision',async()=>{
+  const ctx=await submitted(),legacy=structuredClone(analysisV6),input=JSON.parse(stored(ctx).input_json);
+  delete legacy.identity;legacy.observations=legacy.observations.map(({role,...item})=>item);
+  delete input.ingredientPolicy;input.ingredients[0].role='logo';input.ingredients[0].locked=false;
+  ctx.sql.prepare('UPDATE brand_jobs SET input_json=? WHERE id=?').run(JSON.stringify(input),ctx.id);
+  const stub=provider(),durable=step(),cached={async do(name,options,callback){return name==='understand-brand-ingredients'?structuredClone(legacy):durable.do(name,options,callback);}};
+  assert.equal((await runBrandGeneration(ctx.env,{payload:{jobId:ctx.id}},cached,{fetch:stub.fetch.bind(stub)})).status,'ready');
+  assert.equal(stub.calls.length,1);assert.match(stub.calls[0].url,/images\/generations$/);assert.match(stub.calls[0].payload.prompt,/BOTTOM RIGHT quadrant: entirely empty/);
+  const recipe=JSON.parse(stored(ctx).recipe_json);assert.equal(recipe.logo.assetId,ctx.logo.id);assert.equal(recipe.logo.preserveOriginal,true);assert.equal(recipe.logo.generated,undefined);assert.equal(recipe.brandObjects.length,3);
 });

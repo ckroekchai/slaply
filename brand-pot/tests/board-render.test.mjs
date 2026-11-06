@@ -20,8 +20,8 @@ const geometry=scene=>scene.nodes.filter(n=>n.type==='image'||n.id.startsWith('p
 
 test('brand board has complete bounded geometry and five truthful palette swatches',()=>{
   assert.deepEqual(BOARD_SIZE,{width:2400,height:1800});
-  for(const template of ['editorial','expressive','minimal']){
-    const input=recipe({design:{template,fontPair:'grotesk',imageStyle:'graphic',density:'balanced'}}),original=structuredClone(input),scene=buildBrandBoardScene(input);
+  for(const template of ['ai','minimal','professional','creative']){
+    const input=recipe({design:{template:'editorial',fontPair:'grotesk',imageStyle:'graphic',density:'balanced'},customization:{boardVariant:template}}),original=structuredClone(input),scene=buildBrandBoardScene(input);
     assert.equal(scene.version,6);assert.deepEqual(scene.size,BOARD_SIZE);assert.equal(scene.templateId,template);
     assert(scene.nodes.length>15,'Complete board contains multiple content modules');
     assert.equal(new Set(scene.nodes.map(n=>n.id)).size,scene.nodes.length,'Every scene element has a stable unique ID');
@@ -39,8 +39,8 @@ test('brand board has complete bounded geometry and five truthful palette swatch
 });
 
 test('design choices change structure and actual font families rather than only names or colors',()=>{
-  const templates=['editorial','expressive','minimal'].map(template=>buildBrandBoardScene(recipe({design:{template,fontPair:'grotesk',imageStyle:'graphic',density:'balanced'}})));
-  assert.equal(new Set(templates.map(scene=>JSON.stringify(geometry(scene)))).size,3,'All three templates have distinct module placement');
+  const templates=['ai','minimal','professional','creative'].map(template=>buildBrandBoardScene(recipe({design:{template:'editorial',fontPair:'grotesk',imageStyle:'graphic',density:'balanced'},customization:{boardVariant:template}})));
+  assert.equal(new Set(templates.map(scene=>JSON.stringify(geometry(scene)))).size,4,'All four templates have distinct module placement');
   const fonts=['grotesk','editorial-serif','display'].map(fontPair=>buildBrandBoardScene(recipe({design:{template:'editorial',fontPair,imageStyle:'graphic',density:'balanced'}})));
   assert.equal(new Set(fonts.map(scene=>JSON.stringify(scene.fontFamilies))).size,3,'Font choices resolve to distinct families');
   for(const scene of fonts){
@@ -50,8 +50,8 @@ test('design choices change structure and actual font families rather than only 
 });
 
 test('logo identity survives every layout, palette adjustment and logo size edit',()=>{
-  for(const template of ['editorial','expressive','minimal'])for(const settings of [{logoScale:70},{logoScale:115,hue:93,saturation:150,brightness:55}]){
-    const input=recipe({design:{template,fontPair:'editorial-serif',imageStyle:'material',density:'compact'},customization:settings}),scene=buildBrandBoardScene(input);
+  for(const template of ['ai','minimal','professional','creative'])for(const settings of [{logoScale:70},{logoScale:115,hue:93,saturation:150,brightness:55}]){
+    const input=recipe({design:{template:'editorial',fontPair:'editorial-serif',imageStyle:'material',density:'compact'},customization:{...settings,boardVariant:template}}),scene=buildBrandBoardScene(input);
     const assets=scene.assets.filter(a=>a.sourceRole==='logo'),nodes=scene.nodes.filter(n=>n.type==='image'&&n.sourceRole==='logo');
     assert(assets.length&&nodes.length,'Original logo is explicitly represented as an asset and image');
     for(const asset of assets){assert.equal(asset.src,logo);assert.equal(asset.preserveOriginal,true);}
@@ -74,10 +74,10 @@ test('rendered SVG keeps the supplied identity escaped and immutable logo refere
   assert(!svg.includes('foreignObject'),'Board uses explicit SVG geometry for predictable raster/PDF export');
 });
 
-test('saved user overrides visibly control layout, fonts, logo backdrop and scale',()=>{
-  const small=buildBrandBoardScene(recipe({customization:{layout:'minimal',fontPair:'display',density:'airy',pattern:'stripe',logoBackdrop:'dark',logoScale:70}}));
-  const large=buildBrandBoardScene(recipe({customization:{layout:'minimal',fontPair:'display',density:'airy',pattern:'stripe',logoBackdrop:'dark',logoScale:115}}));
-  assert.equal(small.templateId,'minimal');assert.equal(small.fontPairId,'display');assert.equal(small.density,'airy');assert.equal(small.patternKind,'stripe');
+test('saved board choice fixes its own art direction while preserving logo size and backdrop controls',()=>{
+  const small=buildBrandBoardScene(recipe({customization:{boardVariant:'minimal',layout:'expressive',fontPair:'display',density:'compact',pattern:'stripe',logoBackdrop:'dark',logoScale:70}}));
+  const large=buildBrandBoardScene(recipe({customization:{boardVariant:'minimal',layout:'expressive',fontPair:'display',density:'compact',pattern:'stripe',logoBackdrop:'dark',logoScale:115}}));
+  assert.equal(small.templateId,'minimal');assert.equal(small.fontPairId,'grotesk');assert.equal(small.density,'airy');assert.equal(small.patternKind,'repeat');
   const backdrop=small.nodes.find(n=>n.id==='logo-panel').fill;
   const rgb=[1,3,5].map(i=>parseInt(backdrop.slice(i,i+2),16));assert(rgb.every(n=>n<64),'Dark backdrop remains dark after save/restore normalization');
   const a=small.nodes.find(n=>n.id==='identity-logo'),b=large.nodes.find(n=>n.id==='identity-logo');

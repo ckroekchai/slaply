@@ -24,8 +24,8 @@ test('a v6 recipe without sourceName can still rename exact original brief copy'
 });
 test('valid multiline edited summaries fit their own modules without dropping non-whitespace text',()=>{
   const summary=Array(100).fill('ข้อความ').join('\n');assert(summary.length<=1000);
-  for(const template of ['editorial','expressive','minimal']){
-    const scene=layoutBrandBoardText(buildBrandBoardScene({...source,concept:{title:'Title',summary},design:{template,fontPair:'grotesk'}}));
+  for(const template of ['ai','minimal','professional','creative']){
+    const scene=layoutBrandBoardText(buildBrandBoardScene({...source,concept:{title:'Title',summary},design:{template:'editorial',fontPair:'grotesk'},customization:{boardVariant:template}}));
     const node=scene.nodes.find(n=>n.id==='concept-summary');
     assert.equal(node.lines.map(line=>line.text).join('').replace(/\s/g,''),summary.replace(/\s/g,''));
     assert(node.computedFontSize>=8);assert(node.lines.at(-1).y<=node.bounds.y+node.bounds.h,template);

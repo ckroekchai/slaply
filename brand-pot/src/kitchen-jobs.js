@@ -1,4 +1,5 @@
 import { apiRequest } from './api.js';
+import { canCookIngredients } from './ingredient-roles.js';
 
 // UI revisions own the visible result. Aborting a request does not imply that a
 // provider has stopped work; the server owns cancellation and usage accounting.
@@ -38,6 +39,9 @@ export function createKitchenJobs({ onState, onComplete, onError = () => {}, onJ
   };
   return {
     start(payload) {
+      if (!canCookIngredients(payload.ingredients || [])) {
+        onError(new Error('ใส่วัตถุดิบอย่างน้อย 3 อย่าง')); return null;
+      }
       clear(); cancelRemote(currentJob); currentJob = null;
       const id = ++revision, idempotencyKey = makeKey(); controller = new AbortController(); const signal = controller.signal;
       onState({ phase: 'pouring', revision: id });
@@ -45,7 +49,7 @@ export function createKitchenJobs({ onState, onComplete, onError = () => {}, onJ
         if (id !== revision) return;
         onState({ phase: 'cooking', step: 'queued', revision: id });
         try {
-          const job = await request('/api/jobs', { method: 'POST', body: JSON.stringify({ idempotencyKey, ingredients: payload.ingredients.filter(Boolean).map(item => ({ id: item.id, locked: Boolean(item.locked), ...(['logo','product','reference'].includes(item.role) ? { role: item.role } : {}) })), brief: payload.brief }) });
+          const job = await request('/api/jobs', { method: 'POST', body: JSON.stringify({ idempotencyKey, ingredients: payload.ingredients.filter(Boolean).map(item => ({ id: item.id, locked: Boolean(item.locked), ...(item.notes ? { notes: String(item.notes).slice(0,300) } : {}), ...(item.cutoutId ? { cutoutId: item.cutoutId, cutoutStatus: item.cutoutStatus } : {}), ...(item.cutoutBounds ? { cutoutBounds: item.cutoutBounds } : {}) })), brief: payload.brief }) });
           if (id !== revision) { cancelRemote(job.id); return; }
           if (!job.id) throw new Error('สร้างงานไม่สำเร็จ กรุณาลองใหม่');
           currentJob = job.id; onJob(job.id); await inspect(job.id, id, signal);
@@ -62,7 +66,7 @@ export function createKitchenJobs({ onState, onComplete, onError = () => {}, onJ
   };
 }
 
-export function kitchenStatus({ count, job, hasResult, hasLogo = false, hasBrief = false }) {
+export function kitchenStatus({ count, job, hasResult }) {
   if (job.phase === 'error') return job.error;
   if (job.phase === 'pouring') return 'รับวัตถุดิบใหม่แล้ว…';
   if (job.phase === 'cooking') return ({
@@ -73,7 +77,6 @@ export function kitchenStatus({ count, job, hasResult, hasLogo = false, hasBrief
   }[job.step] || 'กำลังปรุงแบรนด์ของคุณ…');
   if (job.phase === 'ready') return 'เสิร์ฟแล้ว! นี่แหละรสชาติของคุณ';
   if (count === 0) return 'ใส่วัตถุดิบแรกกันเลย';
-  if (count === 1 && hasLogo) return hasBrief ? 'โลโก้และไอเดียพร้อมแล้ว · กด Shake เพื่อปรุง' : 'เติมคำบรรยายให้โลโก้ แล้วกด Shake เพื่อปรุง';
-  if (count === 1) return 'อีก 1 อย่าง แล้วเราจะเริ่มปรุงให้';
+  if (count < 3) return `ใส่อีก ${3-count} อย่าง แล้วกด Shake เพื่อปรุง`;
   return hasResult ? 'เติมไอเดีย หรือ Shake เพื่อปรุงอีกครั้ง' : 'พร้อมแล้ว · กด Shake เพื่อปรุง';
 }

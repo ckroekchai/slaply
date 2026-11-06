@@ -1,10 +1,40 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { recipeFingerprint, isRecipeSaved, persistRecipeSnapshot, moveSavedRecipe, applyRecipeMove } from '../src/recipe-state.js';
+import { recipeFingerprint, isRecipeSaved, persistRecipeSnapshot, moveSavedRecipe, applyRecipeMove, permanentlyDeleteSavedRecipe, permanentRecipeRemoval, isPermanentlyRemovedRecipe } from '../src/recipe-state.js';
 import { uploadValidationMessage, MAX_UPLOAD_BYTES, MAX_RECIPE_UPLOAD_BYTES } from '../src/upload-limits.js';
 
 const recipe = { id: 'job', jobId: 'job', name: 'แบรนด์ของฉัน', words: 'สดใส', concept: { title: 'แนวคิด', summary: 'อบอุ่น เป็นกันเอง' }, customization: { objectStyles: ['bloom'], hue: 0, brightness: 100 } };
 const saved = { ...structuredClone(recipe), id: 'saved-1', savedAt: '2026-11-04T04:00:00Z', version: 2 };
+
+test('purging the last saved version also clears its cached job result and history', () => {
+  const trashed = { ...saved, trashedAt: '2026-11-06T00:00:00Z' };
+  const other = { id: 'other-version', jobId: 'other-job' };
+  const removal = permanentRecipeRemoval({ recipes: [other], trash: [trashed] }, trashed.id, true);
+  assert.equal(isPermanentlyRemovedRecipe(trashed, removal), true);
+  assert.equal(isPermanentlyRemovedRecipe(recipe, removal), true);
+  assert.equal(isPermanentlyRemovedRecipe(other, removal), false);
+  assert.equal(isPermanentlyRemovedRecipe(null, removal), false);
+});
+
+test('purging one version leaves another version and its shared generated result available', () => {
+  for (const place of ['recipes', 'trash']) {
+    const sibling = { ...saved, id: 'saved-2' };
+    const state = { recipes: [], trash: [saved] };
+    state[place].push(sibling);
+    const removal = permanentRecipeRemoval(state, saved.id, false);
+    assert.equal(isPermanentlyRemovedRecipe(saved, removal), true);
+    assert.equal(isPermanentlyRemovedRecipe(sibling, removal), false);
+    assert.equal(isPermanentlyRemovedRecipe(recipe, removal), false);
+  }
+});
+
+test('a sibling outside the loaded page still protects the cached source job', () => {
+  const loaded = { recipes: [], trash: [saved] };
+  const removal = permanentRecipeRemoval(loaded, saved.id, false);
+  assert.equal(isPermanentlyRemovedRecipe(saved, removal), true);
+  assert.equal(isPermanentlyRemovedRecipe(recipe, removal), false);
+  assert.equal(isPermanentlyRemovedRecipe(recipe, permanentRecipeRemoval(loaded, saved.id)), false);
+});
 
 test('saved state depends on confirmed matching content, including concept and each customization', () => {
   assert.equal(isRecipeSaved(recipe, []), false);
@@ -67,4 +97,16 @@ test('upload preflight accepts up to 18 MiB total while keeping the 5 MiB per-im
   assert.match(uploadValidationMessage(file, [{ bytes: 5 * mb }, { bytes: 5 * mb }, { bytes: 3 * mb + 1 }], 3), /18 MB/);
   assert.equal(uploadValidationMessage(file, [{ bytes: 5 * mb }, { bytes: 5 * mb }, { bytes: 5 * mb }], 0), '', 'Replacement excludes the old slot size');
   assert.equal(uploadValidationMessage(file, [{ id: 'legacy-without-bytes' }], 1), '', 'Old recipes remain usable; the server validates their actual bytes');
+});
+
+test('permanent deletion uses its dedicated route and requires an exact server acknowledgement',async()=>{
+  const calls=[];
+  const result=await permanentlyDeleteSavedRecipe('trash-1',async(path,options)=>{calls.push([path,options.method]);return {id:'trash-1',permanentlyDeleted:true,sourcePurged:true}});
+  assert.deepEqual(result,{id:'trash-1',permanentlyDeleted:true,sourcePurged:true});
+  assert.equal((await permanentlyDeleteSavedRecipe('trash-1',async()=>({id:'trash-1',permanentlyDeleted:true,sourcePurged:false}))).sourcePurged,false);
+  await assert.rejects(permanentlyDeleteSavedRecipe('trash-1',async()=>({id:'trash-1',permanentlyDeleted:true})),/ยืนยัน/);
+  assert.deepEqual(calls,[['/api/recipes/trash-1/permanent','DELETE']]);
+  await assert.rejects(permanentlyDeleteSavedRecipe('trash-1',async()=>({id:'other',permanentlyDeleted:true})),/ยืนยัน/);
+  await assert.rejects(permanentlyDeleteSavedRecipe('trash-1',async()=>({id:'trash-1',trashed:true})),/ยืนยัน/);
+  await assert.rejects(permanentlyDeleteSavedRecipe('trash-1',async()=>{throw Error('Offline')}),/Offline/);
 });

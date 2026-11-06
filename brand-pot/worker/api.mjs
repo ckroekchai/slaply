@@ -44,7 +44,7 @@ async function sessionInfo(request,env) {
     db(env).prepare("SELECT id,status,phase FROM brand_jobs WHERE session_id = ? AND status IN ('queued','analyzing','generating') ORDER BY created_at DESC LIMIT 1").bind(current.id).first(),
     // A trashed saved recipe must not reappear as its original generated job on reload.
     db(env).prepare("SELECT recipe_json FROM brand_jobs WHERE session_id = ? AND status = 'ready' AND NOT EXISTS (SELECT 1 FROM brand_recipes WHERE brand_recipes.job_id = brand_jobs.id AND brand_recipes.session_id = brand_jobs.session_id AND deleted_at IS NOT NULL) ORDER BY created_at DESC LIMIT 1").bind(current.id).first(),
-    db(env).prepare('SELECT recipe_json, created_at FROM brand_recipes WHERE session_id = ? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1').bind(current.id).first(),
+    db(env).prepare('SELECT recipe_json, created_at FROM brand_recipes WHERE session_id = ? AND deleted_at IS NULL AND purged_at IS NULL ORDER BY created_at DESC LIMIT 1').bind(current.id).first(),
   ]);
   const latestGenerated=latest?.recipe_json?JSON.parse(latest.recipe_json):null;
   const latestRecipe=saved&&(!latestGenerated||saved.created_at>=latestGenerated.createdAt)?JSON.parse(saved.recipe_json):latestGenerated;
@@ -110,6 +110,11 @@ async function ownedAssets(env,current,ingredients) {
   for(const asset of assets){
     if(VECTOR_MIMES.has(asset.mime)){if(!asset.sha256||!asset.render_r2_key||asset.render_mime!=='image/png'||!asset.render_sha256||!asset.render_width||!asset.render_height)throw notFound();continue;}
     if(asset.width&&asset.height&&asset.sha256)continue;const object=await env.SLAPLY_UPLOADS.get(asset.r2_key);if(!object)throw notFound();const bytes=new Uint8Array(await object.arrayBuffer()),info=inspectImage(bytes);asset.width=info.width;asset.height=info.height;asset.sha256=await hashBytes(bytes);await db(env).prepare('UPDATE brand_assets SET width=?,height=?,sha256=? WHERE id=? AND session_id=?').bind(asset.width,asset.height,asset.sha256,asset.id,current.id).run();
+  }
+  for(let index=0;index<ingredients.length;index++){
+    const item=ingredients[index];if(!item.cutoutId)continue;
+    const derivative=await db(env).prepare("SELECT * FROM brand_assets WHERE id = ? AND session_id = ? AND kind = 'original' AND state = 'ready'").bind(item.cutoutId,current.id).first();
+    if(!item.locked||!derivative||(derivative.mime!=='image/png'&&!(derivative.id===item.id&&derivative.mime==='image/webp'))||derivative.width!==assets[index].width||derivative.height!==assets[index].height)throw notFound();
   }
   return assets;
 }
@@ -195,7 +200,7 @@ async function saveRecipe(request,env,current) {
   // Only text/customization are editable. Client-supplied asset URLs and AI metadata are ignored.
   const version=(await db(env).prepare('SELECT COALESCE(MAX(version_number),0)+1 AS next FROM brand_recipes WHERE session_id = ? AND job_id = ?').bind(current.id,jobId).first()).next;
   const recipe=savedRecipe(source,supplied,id,version);
-  const result=await db(env).prepare('INSERT OR IGNORE INTO brand_recipes (id,session_id,job_id,version_number,recipe_json,created_at) SELECT ?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM brand_recipes WHERE session_id = ?) < 200').bind(id,current.id,jobId,version,JSON.stringify(recipe),now(),current.id).run();
+  const result=await db(env).prepare('INSERT OR IGNORE INTO brand_recipes (id,session_id,job_id,version_number,recipe_json,created_at) SELECT ?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM brand_recipes WHERE session_id = ? AND purged_at IS NULL) < 200 AND EXISTS (SELECT 1 FROM brand_jobs WHERE id = ? AND session_id = ? AND recipe_json IS NOT NULL)').bind(id,current.id,jobId,version,JSON.stringify(recipe),now(),current.id,jobId,current.id).run();
   if(!result.meta.changes)throw new HttpError(409,'SAVE_CONFLICT','บันทึกพร้อมกันหรือสูตรเต็มแล้ว กรุณาลองอีกครั้ง');
   return json({recipe,persisted:true},201);
 }
@@ -204,21 +209,37 @@ function recipeView(row) {
   return row.deleted_at?{...recipe,trashedAt:row.deleted_at}:recipe;
 }
 async function trashRecipe(env,current,id,restore=false) {
-  const row=await db(env).prepare('SELECT recipe_json,deleted_at FROM brand_recipes WHERE id = ? AND session_id = ?').bind(id,current.id).first();
+  const row=await db(env).prepare('SELECT recipe_json,deleted_at FROM brand_recipes WHERE id = ? AND session_id = ? AND purged_at IS NULL').bind(id,current.id).first();
   if(!row)throw notFound();
   if(restore){
-    await db(env).prepare('UPDATE brand_recipes SET deleted_at = NULL WHERE id = ? AND session_id = ?').bind(id,current.id).run();
+    const restored=await db(env).prepare('UPDATE brand_recipes SET deleted_at = NULL WHERE id = ? AND session_id = ? AND purged_at IS NULL').bind(id,current.id).run();
+    if(!restored.meta.changes)throw notFound();
     return json({recipe:JSON.parse(row.recipe_json),restored:true});
   }
   // Repeated DELETE requests preserve the original trash timestamp.
-  await db(env).prepare('UPDATE brand_recipes SET deleted_at = COALESCE(deleted_at, ?) WHERE id = ? AND session_id = ?').bind(now(),id,current.id).run();
-  const trashed=await db(env).prepare('SELECT recipe_json,deleted_at FROM brand_recipes WHERE id = ? AND session_id = ?').bind(id,current.id).first();
+  await db(env).prepare('UPDATE brand_recipes SET deleted_at = COALESCE(deleted_at, ?) WHERE id = ? AND session_id = ? AND purged_at IS NULL').bind(now(),id,current.id).run();
+  const trashed=await db(env).prepare('SELECT recipe_json,deleted_at FROM brand_recipes WHERE id = ? AND session_id = ? AND purged_at IS NULL').bind(id,current.id).first();
+  if(!trashed)throw notFound();
   return json({recipe:recipeView(trashed),trashed:true});
 }
+async function permanentlyDeleteRecipe(env,current,id) {
+  const row=await db(env).prepare('SELECT job_id,deleted_at,purged_at FROM brand_recipes WHERE id = ? AND session_id = ?').bind(id,current.id).first();
+  if(!row||row.purged_at)throw notFound();
+  if(!row.deleted_at)throw new HttpError(409,'RECIPE_NOT_TRASHED','ย้ายสูตรลงถังขยะก่อนลบถาวร');
+  // A content-free tombstone prevents the generated fallback from resurrecting
+  // this deleted recipe. Other versions and their shared artwork stay intact.
+  const result=await db(env).batch([
+    db(env).prepare("UPDATE brand_recipes SET recipe_json = 'null',purged_at = ? WHERE id = ? AND session_id = ? AND deleted_at IS NOT NULL AND purged_at IS NULL").bind(now(),id,current.id),
+    db(env).prepare("UPDATE brand_jobs SET recipe_json = NULL,analysis_json = NULL WHERE id = ? AND session_id = ? AND EXISTS (SELECT 1 FROM brand_recipes WHERE id = ? AND session_id = ? AND purged_at IS NOT NULL) AND NOT EXISTS (SELECT 1 FROM brand_recipes WHERE job_id = ? AND session_id = ? AND purged_at IS NULL)").bind(row.job_id,current.id,id,current.id,row.job_id,current.id),
+  ]);
+  if(!result[0].meta.changes)throw notFound();
+  return json({id,permanentlyDeleted:true,sourcePurged:Boolean(result[1].meta.changes)});
+}
+
 export async function handleApi(request,env) {
   try {
     const url=new URL(request.url),path=url.pathname,method=request.method;
-    if(path==='/api/health'&&method==='GET')return json({ok:true,service:'slaply-brand-pot',version:'2026-11-05.1',paymentsEnabled:false,aiConfigured:Boolean(env.OPENAI_API_KEY&&env.BRAND_GENERATION),storageConfigured:Boolean(env.SLAPLY_DB&&env.SLAPLY_UPLOADS)});
+    if(path==='/api/health'&&method==='GET')return json({ok:true,service:'slaply-brand-pot',version:'2026-11-06.1',paymentsEnabled:false,aiConfigured:Boolean(env.OPENAI_API_KEY&&env.BRAND_GENERATION),storageConfigured:Boolean(env.SLAPLY_DB&&env.SLAPLY_UPLOADS)});
     if(!env.SLAPLY_DB||!env.SLAPLY_UPLOADS)throw new HttpError(503,'STORAGE_CONFIGURATION','ระบบจัดเก็บยังไม่พร้อม กรุณาลองภายหลัง');
     if(request.headers.get('Sec-Fetch-Site')==='cross-site')throw new HttpError(403,'ORIGIN_REJECTED','กรุณาเปิด Slaply โดยตรง');
     if(!['GET','HEAD'].includes(method))assertMutationOrigin(request);
@@ -236,15 +257,16 @@ export async function handleApi(request,env) {
     if(path==='/api/recipes'&&method==='GET'){
       const trash=url.searchParams.get('trash')==='1';
       const rows=await db(env).prepare(trash
-        ?'SELECT recipe_json,deleted_at FROM brand_recipes WHERE session_id = ? AND deleted_at IS NOT NULL ORDER BY deleted_at DESC LIMIT 200'
-        :'SELECT recipe_json,deleted_at FROM brand_recipes WHERE session_id = ? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 40').bind(current.id).all();
+        ?'SELECT recipe_json,deleted_at FROM brand_recipes WHERE session_id = ? AND deleted_at IS NOT NULL AND purged_at IS NULL ORDER BY deleted_at DESC LIMIT 200'
+        :'SELECT recipe_json,deleted_at FROM brand_recipes WHERE session_id = ? AND deleted_at IS NULL AND purged_at IS NULL ORDER BY created_at DESC LIMIT 40').bind(current.id).all();
       return json({recipes:rows.results.map(recipeView)});
     }
     if(path==='/api/recipes'&&method==='POST')return await saveRecipe(request,env,current);
-    const recipeMatch=/^\/api\/recipes\/([0-9a-f-]+)(\/restore)?$/.exec(path);
+    const recipeMatch=/^\/api\/recipes\/([0-9a-f-]+)(\/(?:restore|permanent))?$/.exec(path);
     if(recipeMatch&&UUID.test(recipeMatch[1])){
       if(method==='DELETE'&&!recipeMatch[2])return await trashRecipe(env,current,recipeMatch[1]);
-      if(method==='POST'&&recipeMatch[2])return await trashRecipe(env,current,recipeMatch[1],true);
+      if(method==='DELETE'&&recipeMatch[2]==='/permanent')return await permanentlyDeleteRecipe(env,current,recipeMatch[1]);
+      if(method==='POST'&&recipeMatch[2]==='/restore')return await trashRecipe(env,current,recipeMatch[1],true);
     }
     throw notFound();
   } catch(error) { const safe=publicError(error);if(!(error instanceof HttpError))console.error('brand_api_failure',error?.name||'Error');return json(safe.body,safe.status); }

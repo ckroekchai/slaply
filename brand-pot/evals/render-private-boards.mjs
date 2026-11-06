@@ -37,15 +37,18 @@ for(const fixture of selected){
   const sample=await sharp(bytes).ensureAlpha().resize(256,256,{fit:'inside',withoutEnlargement:true}).raw().toBuffer({resolveWithObject:true}),autoBackdrop=chooseLogoBackdrop(sample.data,{width:sample.info.width,height:sample.info.height});
   const rawRecipePath=aiDir?path.join(aiDir,`${fixture.id}.recipe.json`):null,rawRecipeBytes=rawRecipePath?await readFile(rawRecipePath):null,actualRecipe=rawRecipeBytes?JSON.parse(rawRecipeBytes):null;
   if(actualRecipe){assert.equal(actualRecipe.logo.sha256,fixture.sha256,'Actual AI recipe refers to the exact original fixture');assert.equal(actualRecipe.name,direction.name,'Actual AI preserves the supplied brand name');}
-  for(const [index,template]of (actualRecipe?[actualRecipe.design.template]:['editorial','expressive','minimal']).entries()){
-    const fontPair=['editorial-serif','display','grotesk'][index],id=`${fixture.id}-${template}`;
-    const recipe=actualRecipe?structuredClone(actualRecipe):{schemaVersion:6,name:direction.name,words:direction.words,concept:direction.concept,logo:{assetId:`qa_${fixture.id}`,src,width:fixture.width,height:fixture.height,sha256:fixture.sha256,mime,preserveOriginal:true},ingredients:[{id:`qa_${fixture.id}`,src,role:'logo',locked:true}],design:{template,fontPair,imageStyle:'graphic',density:'balanced'},brandSystem:{palette:roles.map((role,i)=>({role,hex:direction.palette[i],name:role})),typography:{headingSample:direction.heading,bodySample:direction.body},pattern:{kind:'stripe'},applications:[{kind:'social',headline:direction.heading,body:direction.body},{kind:'business-card',headline:direction.name,body:'Brand direction / แนวทางทดลอง'}]},customization:{logoBackdrop:'auto',objectStyles:[]}};
+  for(const template of ['ai','minimal','professional','creative']){
+    const fontPair='editorial-serif',id=`${fixture.id}-${template}`;
+    const recipe=actualRecipe?structuredClone(actualRecipe):{schemaVersion:6,name:direction.name,words:direction.words,concept:direction.concept,logo:{assetId:`qa_${fixture.id}`,src,width:fixture.width,height:fixture.height,sha256:fixture.sha256,mime,preserveOriginal:true},ingredients:[{id:`qa_${fixture.id}`,src,role:'logo',locked:true}],design:{template:'editorial',fontPair,imageStyle:'graphic',density:'balanced'},brandSystem:{palette:roles.map((role,i)=>({role,hex:direction.palette[i],name:role})),typography:{headingSample:direction.heading,bodySample:direction.body},pattern:{kind:'stripe'},applications:[{kind:'social',headline:direction.heading,body:direction.body},{kind:'business-card',headline:direction.name,body:'Brand direction / แนวทางทดลอง'}]},customization:{logoBackdrop:'auto',objectStyles:[]}};
     const uiOverrides=[];
+    recipe.customization={...recipe.customization,boardVariant:template};
     if(actualRecipe&&recipe.customization?.logoBackdrop!=='auto'){uiOverrides.push({field:'customization.logoBackdrop',from:recipe.customization?.logoBackdrop,to:'auto',reason:'Use current UI default; AI design/palette/copy remain unchanged.'});recipe.customization={...recipe.customization,logoBackdrop:'auto'};}
-    const assets=new Map([[recipe.logo.src,data]]);let generatedSha256;
+    const assets=new Map([[recipe.logo.src,data]]);let generatedSha256,displayedLogo=fixture.localPath;
     if(actualRecipe){
       const downloadedOriginal=await readFile(path.join(aiDir,`${fixture.id}-original.${fixture.format==='png'?'png':'jpg'}`));assert.equal(createHash('sha256').update(downloadedOriginal).digest('hex'),fixture.sha256,'Downloaded provider-run original remains byte exact');
       const generated=await readFile(path.join(aiDir,`${fixture.id}-generated.png`));generatedSha256=createHash('sha256').update(generated).digest('hex');assets.set(recipe.generatedImage,`data:image/png;base64,${generated.toString('base64')}`);
+      if(recipe.logo.generated)displayedLogo=path.join(aiDir,`${fixture.id}-generated.png`);
+      else if(recipe.logo.cutout){displayedLogo=path.join(aiDir,`${fixture.id}-cutout.png`);const cutout=await readFile(displayedLogo);assets.set(recipe.logo.src,`data:image/png;base64,${cutout.toString('base64')}`);}
     }
     const scene=layoutBrandBoardText(buildBrandBoardScene(recipe,{}, {logoBackdrop:autoBackdrop}),measureText),svg=renderBrandBoardSVG(scene,{resolveAsset:value=>assets.get(value)||value});
     // The native SVG-to-path helper drops embedded image nodes and mishandles
@@ -61,7 +64,7 @@ for(const fixture of selected){
     const stem=path.join(out,id),files={png:`${stem}.png`,pdf:`${stem}.pdf`,scene:`${stem}.scene.json`,recipe:`${stem}.recipe.json`};
     await Promise.all([writeFile(files.png,png),writeFile(files.pdf,pdf),writeFile(files.scene,JSON.stringify(scene,null,2)),writeFile(files.recipe,JSON.stringify(recipe,null,2))]);
     let verification;
-    try{verification=await verifyBoardArtifacts({png:files.png,pdf:files.pdf,scene,logo:fixture.localPath});}catch(error){verification={passed:false,error:error.message};}
+    try{verification=await verifyBoardArtifacts({png:files.png,pdf:files.pdf,scene,recipe,logo:displayedLogo,logoOriginal:recipe.logo.cutout?fixture.localPath:undefined});}catch(error){verification={passed:false,error:error.message};}
     if(rawRecipeBytes)assert(Buffer.from(await readFile(rawRecipePath)).equals(rawRecipeBytes),'Raw AI recipe remains unchanged');
     runs.push({id,fixtureId:fixture.id,provenance:actualRecipe?'actual-provider-result':'manually-selected-deterministic-fixture',sourceHash:fixture.sha256,rawRecipeSha256:rawRecipeBytes?createHash('sha256').update(rawRecipeBytes).digest('hex'):undefined,generatedSha256,template:scene.templateId,fontPair:scene.fontPairId,autoBackdrop,uiOverrides,ai:actualRecipe?{jobId:actualRecipe.jobId,textModel:actualRecipe.ai?.textModel,imageModel:actualRecipe.ai?.imageModel,promptVersion:actualRecipe.ai?.promptVersion}:undefined,files,verification});
     console.log(`${verification.passed===false?'FAIL':'PASS'} ${id}${verification.error?`: ${verification.error}`:''}`);

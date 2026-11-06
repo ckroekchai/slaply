@@ -1,7 +1,7 @@
 import { inspectImage } from './image-validation.mjs';
 import { modelPolicy, summarizeUsage } from './model-policy.mjs';
 import { BRAND_OBJECT_IDS, objectCrop } from '../shared/brand-objects.mjs';
-export const PROMPT_VERSION = 'brand-guideline-2026-11-05.3';
+export const PROMPT_VERSION = 'brand-guideline-2026-11-06.1';
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 export const MAX_JOB_UPLOAD_BYTES = 18 * 1024 * 1024;
 export const SESSION_DAYS = 90;
@@ -56,25 +56,35 @@ export function validateJob(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'INVALID_INPUT', 'ข้อมูลสูตรไม่ถูกต้อง');
   if (typeof body.idempotencyKey !== 'string' || !/^[A-Za-z0-9_-]{16,100}$/.test(body.idempotencyKey)) throw new HttpError(400, 'INVALID_INPUT', 'รหัสคำขอไม่ถูกต้อง กรุณาลองใหม่');
   if (body.schemaVersion !== undefined && body.schemaVersion !== 6) throw new HttpError(400,'INVALID_INPUT','รุ่นข้อมูลสูตรไม่รองรับ กรุณาโหลดหน้าใหม่');
-  if (!Array.isArray(body.ingredients) || body.ingredients.length < 1 || body.ingredients.length > 6) throw new HttpError(400, 'INVALID_INPUT', 'ใส่โลโก้พร้อมบรีฟ หรือวัตถุดิบ 2–6 อย่าง');
+  if (!Array.isArray(body.ingredients) || body.ingredients.length < 3 || body.ingredients.length > 6) throw new HttpError(400, 'INVALID_INPUT', 'ใส่วัตถุดิบอย่างน้อย 3 อย่าง และไม่เกิน 6 อย่าง');
   const ingredients = body.ingredients.map(item => {
-    if (!item || !UUID.test(item.id) || (item.locked !== undefined && typeof item.locked !== 'boolean') || (item.role !== undefined && !['logo','product','reference'].includes(item.role))) throw new HttpError(400, 'INVALID_INPUT', 'ข้อมูลวัตถุดิบไม่ถูกต้อง');
-    return { id: item.id, role:item.role||'reference', locked: Boolean(item.locked) };
+    if (!item || !UUID.test(item.id) || (item.locked !== undefined && typeof item.locked !== 'boolean') || (item.role !== undefined && !['auto','logo','product','reference'].includes(item.role))) throw new HttpError(400, 'INVALID_INPUT', 'ข้อมูลวัตถุดิบไม่ถูกต้อง');
+    // A client role is only a legacy UI hint. New jobs always classify the original
+    // pixels with vision; a claimed role cannot change preservation semantics.
+    const result={id:item.id,role:'auto',locked:Boolean(item.locked)};
+    if(item.notes!==undefined)result.notes=cleanText(item.notes,300,'คำอธิบายวัตถุดิบ');
+    if(item.cutoutId!==undefined){
+      if(!result.locked||!UUID.test(item.cutoutId))throw new HttpError(400,'INVALID_INPUT','ภาพไดคัตต้องเป็นวัตถุดิบที่ล็อกไว้');
+      result.cutoutId=item.cutoutId;
+      if(!['removed','transparent'].includes(item.cutoutStatus))throw new HttpError(400,'INVALID_INPUT','สถานะภาพไดคัตไม่ถูกต้อง');
+      result.cutoutStatus=item.cutoutStatus;
+      const r=item.cutoutBounds;
+      if(!r||typeof r!=='object'||['x','y','w','h'].some(k=>typeof r[k]!=='number'||!Number.isFinite(r[k]))||r.x<0||r.y<0||r.w<=0||r.h<=0||r.x+r.w>1.000001||r.y+r.h>1.000001)throw new HttpError(400,'INVALID_INPUT','ขอบเขตภาพไดคัตไม่ถูกต้อง');
+      result.cutoutBounds=Object.fromEntries(['x','y','w','h'].map(k=>[k,r[k]]));
+    }
+    return result;
   });
   const brief={name:cleanText(body.brief?.name??'',80,'ชื่อแบรนด์'),words:cleanText(body.brief?.words??'',1000,'คำบรรยาย')};
-  for(const field of ['category','audience','offering','constraints'])if(body.brief?.[field]!==undefined)brief[field]=cleanText(body.brief[field],field==='constraints'?600:240,'ข้อมูลแบรนด์');
-  const logos=ingredients.filter(item=>item.role==='logo');
-  if(logos.length>1)throw new HttpError(400,'INVALID_INPUT','เลือกโลโก้หลักได้หนึ่งไฟล์ต่อสูตร');
-  if(ingredients.length===1&&(!logos.length||!brief.words))throw new HttpError(400,'INVALID_INPUT','ใส่โลโก้พร้อมคำบรรยายแบรนด์ หรือเพิ่มวัตถุดิบอย่างน้อย 2 อย่าง');
+  for(const field of ['category','audience','offering','constraints','chefNotes'])if(body.brief?.[field]!==undefined)brief[field]=cleanText(body.brief[field],field==='chefNotes'?2000:field==='constraints'?600:240,'ข้อมูลแบรนด์');
   if (new Set(ingredients.map(x => x.id)).size !== ingredients.length) throw new HttpError(400, 'INVALID_INPUT', 'วัตถุดิบแต่ละช่องต้องเป็นการอัปโหลดแยกกัน');
-  return { schemaVersion:6,idempotencyKey: body.idempotencyKey, ingredients, brief };
+  return { schemaVersion:6,ingredientPolicy:'auto-lock-v1',idempotencyKey: body.idempotencyKey, ingredients, brief };
 }
 export function normalizeCustomization(input = {}) {
   input=input&&typeof input==='object'&&!Array.isArray(input)?input:{};
   const clamp = (key, lo, hi, fallback) => typeof input[key] === 'number' && Number.isFinite(input[key]) ? Math.min(hi, Math.max(lo, input[key])) : fallback;
   const objectStyles = Array.isArray(input.objectStyles) ? ['bloom','orbit','ribbon',...BRAND_OBJECT_IDS].filter(v => input.objectStyles.includes(v)) : ['bloom'];
   const board={};
-  for(const [key,values] of Object.entries({layout:['auto','editorial','expressive','minimal'],fontPair:['auto','grotesk','editorial-serif','display'],density:['auto','airy','balanced','compact'],pattern:['auto','repeat','stripe','tile'],logoBackdrop:['auto','light','dark']}))if(Object.hasOwn(input,key))board[key]=values.includes(input[key])?input[key]:values[0];
+  for(const [key,values] of Object.entries({boardVariant:['ai','minimal','professional','creative'],layout:['auto','editorial','expressive','minimal'],fontPair:['auto','grotesk','editorial-serif','display'],density:['auto','airy','balanced','compact'],pattern:['auto','repeat','stripe','tile'],logoBackdrop:['auto','light','dark']}))if(Object.hasOwn(input,key))board[key]=values.includes(input[key])?input[key]:values[0];
   if(Object.hasOwn(input,'logoScale'))board.logoScale=clamp('logoScale',70,115,100);
   return { ...board,textScale: clamp('textScale',75,125,100), objectScale: clamp('objectScale',50,150,100), objectStyles, objectStyle: objectStyles[0] || null, hue: clamp('hue',-180,180,0), brightness: clamp('brightness',50,150,100), saturation: clamp('saturation',0,180,100) };
 }
@@ -91,7 +101,7 @@ export const ANALYSIS_SCHEMA = {
     palette: { type:'array',items:{type:'string',pattern:'^#[0-9A-Fa-f]{6}$'},minItems:3,maxItems:3 },
     paper: {type:'string',pattern:'^#[0-9A-Fa-f]{6}$'}, ink: {type:'string',pattern:'^#[0-9A-Fa-f]{6}$'},
     keywords: {type:'array',items:string,minItems:3,maxItems:3}, audience:string, promise:string,
-    observations: {type:'array',items:{type:'object',additionalProperties:false,properties:{ingredientIndex:{type:'integer'},observed:string,inspiration:string},required:['ingredientIndex','observed','inspiration']},minItems:1,maxItems:6},
+    observations: {type:'array',items:{type:'object',additionalProperties:false,properties:{ingredientIndex:{type:'integer'},role:{type:'string',enum:['logo','product','reference']},observed:string,inspiration:string},required:['ingredientIndex','role','observed','inspiration']},minItems:1,maxItems:6},
     imagePrompt:string,
   },
   required:['proposedName','concept','mood','palette','paper','ink','keywords','audience','promise','observations','imagePrompt'],
@@ -109,7 +119,8 @@ ANALYSIS_SCHEMA.properties.brandSystem=objectSchema({
   objects:{type:'array',minItems:3,maxItems:3,items:objectSchema({id:enumSchema(BRAND_OBJECT_IDS),name:string,rationale:string,visual:string,colors:{type:'array',minItems:1,maxItems:3,items:enumSchema(['primary','secondary','accent'])}})},
   applications:{type:'array',minItems:2,maxItems:2,items:objectSchema({kind:enumSchema(['social','business-card']),headline:string,body:string})},
 });
-ANALYSIS_SCHEMA.required.push('schemaVersion','design','brandSystem');
+ANALYSIS_SCHEMA.properties.identity=objectSchema({ingredientIndex:{type:'integer',minimum:0,maximum:6},visual:string,rationale:string});
+ANALYSIS_SCHEMA.required.push('schemaVersion','design','brandSystem','identity');
 export function validateBrandSystem(data,{requireObjects=false}={}) {
   const bad=()=>{throw new HttpError(502,'AI_INVALID_OUTPUT','AI ส่งรายละเอียด Brand Guideline ไม่ครบ กรุณาลองใหม่');};
   const text=(value,max)=>typeof value==='string'&&value.trim().length>0&&value.length<=max&&!/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(value);
@@ -128,7 +139,7 @@ export function validateBrandSystem(data,{requireObjects=false}={}) {
   if(['primary','secondary','accent'].some((role,i)=>color(role)!==data.palette[i].toUpperCase())||color('paper')!==data.paper.toUpperCase()||color('ink')!==data.ink.toUpperCase())bad();
   return data;
 }
-export function validateAnalysis(data, count, suppliedName = '', schemaVersion = 5, requireObjects = false) {
+export function validateAnalysis(data, count, suppliedName = '', schemaVersion = 5, requireObjects = false, requireIdentity = false) {
   const bad = () => { throw new HttpError(502, 'AI_INVALID_OUTPUT', 'AI ส่งผลลัพธ์ไม่ครบ กรุณาลองปรุงใหม่'); };
   if (!data || typeof data !== 'object') bad();
   // A supplied name is authoritative; the model should not be forced to invent another.
@@ -138,6 +149,12 @@ export function validateAnalysis(data, count, suppliedName = '', schemaVersion =
   if (!['fresh','bold','luxe'].includes(data.mood) || !Array.isArray(data.palette) || data.palette.length !== 3 || [...data.palette,data.paper,data.ink].some(v=>!/^#[a-f0-9]{6}$/i.test(v))) bad();
   if (!Array.isArray(data.keywords) || data.keywords.length !== 3 || data.keywords.some(v=>typeof v!=='string'||!v.trim()||v.length>32)) bad();
   if (!Array.isArray(data.observations) || data.observations.length !== count || new Set(data.observations.map(x=>x?.ingredientIndex)).size !== count || data.observations.some(x=>!x||!Number.isInteger(x.ingredientIndex)||x.ingredientIndex<1||x.ingredientIndex>count||typeof x.observed!=='string'||!x.observed.trim()||x.observed.length>300||typeof x.inspiration!=='string'||!x.inspiration.trim()||x.inspiration.length>300)) bad();
+  if(requireIdentity){
+    if(data.observations.some(o=>!['logo','product','reference'].includes(o.role)))bad();
+    const identity=data.identity;
+    if(!identity||!Number.isInteger(identity.ingredientIndex)||identity.ingredientIndex<0||identity.ingredientIndex>count||typeof identity.visual!=='string'||!identity.visual.trim()||identity.visual.length>800||typeof identity.rationale!=='string'||!identity.rationale.trim()||identity.rationale.length>300)bad();
+    if(identity.ingredientIndex&&data.observations.find(o=>o.ingredientIndex===identity.ingredientIndex)?.role!=='logo')bad();
+  }
   if(schemaVersion===6)validateBrandSystem(data,{requireObjects});
   return data;
 }
@@ -155,19 +172,29 @@ export function analysisDiagnostics(data, count, suppliedName = '') {
     observations:{type:type(data?.observations),count:Array.isArray(data?.observations)?data.observations.length:null,uniqueIndexCount:Array.isArray(data?.observations)?new Set(data.observations.map(x=>x?.ingredientIndex)).size:null,items:Array.isArray(data?.observations)?data.observations.map(x=>({indexValid:Number.isInteger(x?.ingredientIndex)&&x.ingredientIndex>=1&&x.ingredientIndex<=count,observed:text(x?.observed),inspiration:text(x?.inspiration)})):null},
   };
 }
-export function buildRecipe(job, analysis, assets, imageId, env) {
+export function buildRecipe(job, analysis, assets, imageId, env, cutouts = []) {
   const input = JSON.parse(job.input_json);
+  const automatic=Boolean(analysis.identity)&&analysis.observations.every(o=>['logo','product','reference'].includes(o.role));
   const ingredients = input.ingredients.map((item,index)=>{
     const asset=assets[index],originalSrc=`/api/assets/${item.id}`,converted=Boolean(asset.render_r2_key);
-    return {id:item.id,src:converted?`${originalSrc}/preview`:originalSrc,originalSrc,originalUrl:originalSrc,name:asset.original_name,bytes:asset.bytes,mime:asset.mime,width:(converted?asset.render_width:asset.width)??null,height:(converted?asset.render_height:asset.height)??null,sourceWidth:asset.width??null,sourceHeight:asset.height??null,sha256:asset.sha256??null,...(converted?{renderMime:asset.render_mime,renderSha256:asset.render_sha256,renderer:asset.renderer_version,converterVersion:asset.converter_version}:{}),role:item.role||'reference',locked:item.locked,observation:analysis.observations.find(o=>o.ingredientIndex===index+1)?.observed};
+    return {id:item.id,src:converted?`${originalSrc}/preview`:originalSrc,originalSrc,originalUrl:originalSrc,name:asset.original_name,bytes:asset.bytes,mime:asset.mime,width:(converted?asset.render_width:asset.width)??null,height:(converted?asset.render_height:asset.height)??null,sourceWidth:asset.width??null,sourceHeight:asset.height??null,sha256:asset.sha256??null,...(converted?{renderMime:asset.render_mime,renderSha256:asset.render_sha256,renderer:asset.renderer_version,converterVersion:asset.converter_version}:{}),role:automatic?analysis.observations.find(o=>o.ingredientIndex===index+1).role:(item.role==='auto'?'reference':item.role||'reference'),locked:item.locked,...item.notes?{notes:item.notes}:{},...item.cutoutId?{cutoutId:item.cutoutId,cutoutBounds:item.cutoutBounds,cutoutStatus:item.cutoutStatus}:{},observation:analysis.observations.find(o=>o.ingredientIndex===index+1)?.observed};
   });
-  const logoIngredient=ingredients.find(x=>x.role==='logo');
+  const logoIngredient=automatic?(ingredients.find(x=>x.role==='logo'&&x.locked)||ingredients[analysis.identity.ingredientIndex-1]||ingredients.find(x=>x.role==='logo')):ingredients.find(x=>x.role==='logo');
   const primary=ingredients.find(x=>x.role==='product')||logoIngredient||ingredients.find(x=>x.locked)||ingredients[0];
   const reference=ingredients.find(x=>x.role==='reference'&&x!==primary)||ingredients.find(x=>x!==primary)||primary;
   const policy=input.modelPolicy||modelPolicy(env),usage=summarizeUsage(job.usage_json?JSON.parse(job.usage_json):{});
-  const logo=logoIngredient?{...Object.fromEntries(['src','originalSrc','originalUrl','width','height','sourceWidth','sourceHeight','sha256','mime','renderMime','renderSha256','renderer','converterVersion'].filter(key=>logoIngredient[key]!==undefined).map(key=>[key,logoIngredient[key]])),assetId:logoIngredient.id,preserveOriginal:true}:null;
+  let logo=logoIngredient?{...Object.fromEntries(['src','originalSrc','originalUrl','width','height','sourceWidth','sourceHeight','sha256','mime','renderMime','renderSha256','renderer','converterVersion'].filter(key=>logoIngredient[key]!==undefined).map(key=>[key,logoIngredient[key]])),assetId:logoIngredient.id,preserveOriginal:true}:null;
+  if(automatic){
+    if(logoIngredient?.locked){
+      const cutout=cutouts.find(a=>a?.id===logoIngredient.cutoutId);
+      logo={...logo,generated:false,preserveOriginal:true,...cutout?{src:`/api/assets/${cutout.id}`,width:cutout.width,height:cutout.height,cutout:true,contentBounds:logoIngredient.cutoutBounds,cutoutBounds:logoIngredient.cutoutBounds,cutoutStatus:logoIngredient.cutoutStatus,renderSha256:cutout.sha256,renderMime:cutout.mime}:{cutout:false,cutoutStatus:'unchanged'}};
+    }else{
+      logo={src:`/api/assets/${imageId}`,crop:{x:.5,y:.5,w:.5,h:.5},width:512,height:512,assetId:imageId,generated:true,preserveOriginal:false,rationale:analysis.identity.rationale,...logoIngredient?{originalSrc:logoIngredient.originalSrc,originalUrl:logoIngredient.originalUrl,originalAssetId:logoIngredient.id,originalSha256:logoIngredient.sha256}:{}};
+    }
+  }
   const v6=analysis.schemaVersion===6;
-  const result={schemaVersion:v6?6:5,id:job.id,jobId:job.id,version:1,sourceName:input.brief.name || analysis.proposedName,name:input.brief.name || analysis.proposedName,words:input.brief.words || analysis.concept.summary,brief:input.brief,concept:analysis.concept,mood:analysis.mood,palette:analysis.palette,paper:analysis.paper,ink:analysis.ink,keywords:analysis.keywords,audience:analysis.audience,promise:analysis.promise,observations:analysis.observations,image:primary.src,productImage:primary.src,referenceImage:reference.src,referenceColor:analysis.palette[0],generatedImage:`/api/assets/${imageId}`,logo,ingredients,locked:ingredients.some(x=>x.locked),strength:64,format:'guideline',customization:normalizeCustomization(v6?{objectStyles:[],layout:'auto',fontPair:'auto',density:'auto',pattern:'auto',logoBackdrop:'auto',logoScale:100}:{objectStyles:[]}),createdAt:now(),ai:{textModel:policy.text,imageModel:policy.image,policy,promptVersion:PROMPT_VERSION,generatedAt:now(),status:'generated',originalsPreserved:true,...usage}};
+  const result={schemaVersion:v6?6:5,id:job.id,jobId:job.id,version:1,sourceName:input.brief.name || analysis.proposedName,name:input.brief.name || analysis.proposedName,words:input.brief.words || analysis.concept.summary,brief:input.brief,concept:analysis.concept,mood:analysis.mood,palette:analysis.palette,paper:analysis.paper,ink:analysis.ink,keywords:analysis.keywords,audience:analysis.audience,promise:analysis.promise,observations:analysis.observations,image:primary.src,productImage:primary.src,referenceImage:reference.src,referenceColor:analysis.palette[0],generatedImage:`/api/assets/${imageId}`,logo,ingredients,locked:ingredients.some(x=>x.locked),strength:64,format:'guideline',customization:normalizeCustomization(v6?{objectStyles:[],boardVariant:'ai',layout:'auto',fontPair:'auto',density:'auto',pattern:'auto',logoBackdrop:'auto',logoScale:100}:{objectStyles:[]}),createdAt:now(),ai:{textModel:policy.text,imageModel:policy.image,policy,promptVersion:PROMPT_VERSION,generatedAt:now(),status:'generated',originalsPreserved:true,...usage}};
+  if(automatic)result.identity={...analysis.identity,mode:logo.generated?'generated':'preserved',ingredientPolicy:'auto-lock-v1'};
   if(v6){result.design=analysis.design;result.brandSystem=analysis.brandSystem;result.palette=['primary','secondary','accent'].map(role=>analysis.brandSystem.palette.find(color=>color.role===role).hex);result.paper=analysis.brandSystem.palette.find(color=>color.role==='paper').hex;result.ink=analysis.brandSystem.palette.find(color=>color.role==='ink').hex;result.referenceColor=result.palette[0];}
   if(v6&&analysis.brandSystem.objects?.length===3){
     result.brandObjects=BRAND_OBJECT_IDS.map(id=>({...analysis.brandSystem.objects.find(item=>item.id===id),src:result.generatedImage,crop:objectCrop(id),width:512,height:512}));

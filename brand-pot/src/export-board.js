@@ -110,7 +110,7 @@ export async function createBoardExport(recipe,mood,type) {
     for(const key of ['generatedImage','image','productImage','referenceImage'])if(recipe[key])embedded[key]=await embeddedSource(recipe[key]);
     if(recipe.brandObjects)embedded.brandObjects=brandObjects(recipe).map(object=>({...object,src:embedded.generatedImage}));
     embedded.ingredients=await Promise.all((recipe.ingredients||[]).map(embedItem));
-    const result={schema:'slaply.brand-recipe.v6',createdAt:new Date().toISOString(),recipe:embedded,guideline:{size:scene.size,template:scene.templateId,fontPair:scene.fontPairId,palette:scene.palette,colorSpace:'sRGB',dpi:300}};
+    const result={schema:'slaply.brand-recipe.v6',createdAt:new Date().toISOString(),recipe:embedded,guideline:{size:scene.size,template:scene.templateId,boardVariant:scene.variantId,fontPair:scene.fontPairId,palette:scene.palette,colorSpace:'sRGB',dpi:300}};
     return {blob:new Blob([JSON.stringify(result,null,2)],{type:'application/json;charset=utf-8'}),scene};
   }
   if(type==='html') {
