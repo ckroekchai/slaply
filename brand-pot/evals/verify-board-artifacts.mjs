@@ -118,6 +118,27 @@ export async function verifyBoardArtifacts({ png, pdf, scene, logo, logoReferenc
       const prior=scene.nodes.slice(0,scene.nodes.indexOf(node));
       const backdrop=prior.filter(n=>n.type==='rect'&&hex(n.fill)&&n.bounds.x<=paintedBounds.x&&n.bounds.y<=paintedBounds.y&&n.bounds.x+n.bounds.w>=paintedBounds.x+paintedBounds.w&&n.bounds.y+n.bounds.h>=paintedBounds.y+paintedBounds.h).at(-1);
       assert(backdrop,`Logo ${node.id} has an explicit flat backdrop`);
+      let clearGutterPixels=0;
+      if(plan.crop){
+        // The atlas-leak regression happens outside the contained source, so
+        // inspect those gutters as well. Resolve their actual prior flat layer
+        // rather than assuming a single panel also covers neighboring gutters.
+        const layers=[...prior].reverse();
+        const backgroundAt=(px,py)=>{
+          for(const layer of layers){const b=layer.bounds;if(px<b.x||px>=b.x+b.w||py<b.y||py>=b.y+b.h)continue;
+            if(layer.type!=='rect'||!hex(layer.fill))return null;
+            const r=layer.radius||0;if(Math.min(px-b.x,b.x+b.w-px,py-b.y,b.y+b.h-py)<2)return null;
+            if(r&&((px<b.x+r||px>b.x+b.w-r)&&(py<b.y+r||py>b.y+b.h-r)))return null;
+            return hex(layer.fill);
+          }return null;
+        };
+        for(let py=Math.ceil(y+1);py<Math.floor(y+h-1);py++)for(let px=Math.ceil(x+1);px<Math.floor(x+w-1);px++){
+          if(px>=paintedBounds.x-2&&px<=paintedBounds.x+paintedBounds.w+2&&py>=paintedBounds.y-2&&py<=paintedBounds.y+paintedBounds.h+2)continue;
+          const expected=backgroundAt(px,py);if(!expected)continue;
+          const actual=rgbAt(decoded,px,py);clearGutterPixels++;
+          assert(actual.every((n,i)=>Math.abs(n-expected[i])<=2),`Logo ${node.id} leaks image content into its unpainted contain gutter at ${px},${py}`);
+        }
+      }
       if(browserReference){
         // This optional reference must be independently composed from the exact
         // source bytes and authorized source crop/adjustments in the same browser.
@@ -125,7 +146,7 @@ export async function verifyBoardArtifacts({ png, pdf, scene, logo, logoReferenc
         // transparent margins, while unpainted contain-box gutters are excluded.
         const browserDiff=diff(decoded,browserReference,(px,py)=>px>=paintedBounds.x&&px<paintedBounds.x+paintedBounds.w&&py>=paintedBounds.y&&py<paintedBounds.y+paintedBounds.h);
         assert.equal(browserDiff.maximumChannelDifference,0,`Logo ${node.id} differs from the independent same-browser original reference: ${JSON.stringify(browserDiff)}`);
-        comparisons.push({id:node.id,mode:plan.mode,sourceCrop:plan.crop,solidPixels:total,solidDifferences:errors,...browserDiff,exactSameBrowserReference:true});
+        comparisons.push({id:node.id,mode:plan.mode,sourceCrop:plan.crop,clearGutterPixels,solidPixels:total,solidDifferences:errors,...browserDiff,exactSameBrowserReference:true});
         sampled+=total;
         continue;
       }
@@ -137,7 +158,7 @@ export async function verifyBoardArtifacts({ png, pdf, scene, logo, logoReferenc
       // rather than weakening a whole-image average that could hide a changed logo.
       const envelope=samplingEnvelope(reference,decoded,{bounds:paintedBounds,radius:2});
       assert.equal(envelope.outsidePixels,0,`Logo ${node.id} differs beyond its original local edge colors: ${JSON.stringify(envelope)}`);
-      comparisons.push({id:node.id,mode:plan.mode,sourceCrop:plan.crop,solidPixels:total,solidDifferences:errors,...foregroundDiff,...envelope,edgeSamplingRadius:2});
+      comparisons.push({id:node.id,mode:plan.mode,sourceCrop:plan.crop,clearGutterPixels,solidPixels:total,solidDifferences:errors,...foregroundDiff,...envelope,edgeSamplingRadius:2});
       sampled+=total;
     }
     record('logo composition matches its authorized source geometry and colors',{nodes:nodes.length,sampledPixels:sampled,comparisons});
