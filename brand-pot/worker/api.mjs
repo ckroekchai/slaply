@@ -6,6 +6,9 @@ const JSON_HEADERS = { 'Content-Type':'application/json; charset=utf-8','Cache-C
 export function json(body, status=200, extra={}) { return new Response(JSON.stringify(body), {status,headers:{...JSON_HEADERS,...extra}}); }
 const notFound = () => new HttpError(404,'NOT_FOUND','ไม่พบรายการนี้ในเบราว์เซอร์ของคุณ');
 const db = env => env.SLAPLY_DB;
+// This entitlement is administered in D1 only; request bodies and cookies cannot enable it.
+const unlimitedTrial = current => current.unlimited_trial === 1;
+const publicQuotaSession = 'session_id NOT IN (SELECT id FROM brand_sessions WHERE unlimited_trial = 1)';
 const documentUploadsEnabled = env => env.ENABLE_DOCUMENT_UPLOADS === 'true' && typeof env.ASSET_CONVERTER?.fetch === 'function';
 const ipHash = request => hash(`brand-pot-ip:${request.headers.get('CF-Connecting-IP') || 'local'}`);
 async function readBytes(request, maximum) {
@@ -22,7 +25,7 @@ async function bodyJson(request) {
 }
 async function session(request,env) {
   const token=cookieValue(request);if(!token)return null;
-  return db(env).prepare('SELECT id, created_at, expires_at FROM brand_sessions WHERE token_hash = ? AND expires_at > ?').bind(await hash(token),now()).first();
+  return db(env).prepare('SELECT id, created_at, expires_at, unlimited_trial FROM brand_sessions WHERE token_hash = ? AND expires_at > ?').bind(await hash(token),now()).first();
 }
 async function ensureSession(request,env) {
   let current=await session(request,env);if(current)return {current};
@@ -30,12 +33,13 @@ async function ensureSession(request,env) {
   const id=crypto.randomUUID(),ip=await ipHash(request),since=new Date(Date.now()-86400000).toISOString();
   const result=await db(env).prepare('INSERT INTO brand_sessions (id,token_hash,ip_hash,created_at,expires_at) SELECT ?,?,?,?,? WHERE (SELECT COUNT(*) FROM brand_sessions WHERE ip_hash = ? AND created_at > ?) < 25').bind(id,await hash(token),ip,createdAt,expiresAt,ip,since).run();
   if(!result.meta.changes)throw new HttpError(429,'SESSION_LIMIT','เปิดเซสชันใหม่หลายครั้งเกินไป กรุณาใช้เบราว์เซอร์เดิมหรือลองภายหลัง');
-  return {current:{id,created_at:createdAt,expires_at:expiresAt},cookie:sessionCookie(request,token)};
+  return {current:{id,created_at:createdAt,expires_at:expiresAt,unlimited_trial:0},cookie:sessionCookie(request,token)};
 }
 async function quota(request,env,current) {
+  if(unlimitedTrial(current))return {unlimited:true,remaining:null,limit:null,globalRemaining:null};
   const today=day(),ip=await ipHash(request),bound=limits(env);
-  const values=await db(env).prepare('SELECT SUM(CASE WHEN session_id = ? THEN 1 ELSE 0 END) AS session_used, SUM(CASE WHEN ip_hash = ? THEN 1 ELSE 0 END) AS ip_used, COUNT(*) AS global_used FROM brand_jobs WHERE day = ?').bind(current.id,ip,today).first();
-  return {remaining:Math.max(0,Math.min(bound.session-(values.session_used||0),bound.ip-(values.ip_used||0),bound.global-values.global_used)),limit:bound.session,globalRemaining:Math.max(0,bound.global-values.global_used)};
+  const values=await db(env).prepare(`SELECT SUM(CASE WHEN session_id = ? THEN 1 ELSE 0 END) AS session_used, SUM(CASE WHEN ip_hash = ? THEN 1 ELSE 0 END) AS ip_used, COUNT(*) AS global_used FROM brand_jobs WHERE day = ? AND ${publicQuotaSession}`).bind(current.id,ip,today).first();
+  return {unlimited:false,remaining:Math.max(0,Math.min(bound.session-(values.session_used||0),bound.ip-(values.ip_used||0),bound.global-values.global_used)),limit:bound.session,globalRemaining:Math.max(0,bound.global-values.global_used)};
 }
 async function sessionInfo(request,env) {
   const {current,cookie}=await ensureSession(request,env);
@@ -78,9 +82,9 @@ async function upload(request,env,current) {
   // One atomic INSERT guards upload volume even when clients upload concurrently.
   const inserted=await db(env).prepare(`INSERT INTO brand_assets (id,session_id,kind,r2_key,mime,bytes,original_name,state,ip_hash,day,created_at)
     SELECT ?,?,'original',?,?,?,?,'pending',?,?,?
-    WHERE (SELECT COUNT(*) FROM brand_assets WHERE session_id = ? AND day = ? AND kind = 'original') < 60
-      AND (SELECT COUNT(*) FROM brand_assets WHERE ip_hash = ? AND day = ? AND kind = 'original') < 120
-      AND (SELECT COUNT(*) FROM brand_assets WHERE day = ? AND kind = 'original') < 1000`).bind(id,current.id,key,mime,bytes.length,name,ip,today,now(),current.id,today,ip,today,today).run();
+    WHERE ? = 1 OR ((SELECT COUNT(*) FROM brand_assets WHERE session_id = ? AND day = ? AND kind = 'original' AND ${publicQuotaSession}) < 60
+      AND (SELECT COUNT(*) FROM brand_assets WHERE ip_hash = ? AND day = ? AND kind = 'original' AND ${publicQuotaSession}) < 120
+      AND (SELECT COUNT(*) FROM brand_assets WHERE day = ? AND kind = 'original' AND ${publicQuotaSession}) < 1000)`).bind(id,current.id,key,mime,bytes.length,name,ip,today,now(),Number(unlimitedTrial(current)),current.id,today,ip,today,today).run();
   if(!inserted.meta.changes)throw new HttpError(429,'UPLOAD_LIMIT','ถึงขีดจำกัดอัปโหลดวันนี้แล้ว กรุณาลองใหม่พรุ่งนี้');
   let derivative;
   try {
@@ -147,9 +151,9 @@ async function createJob(request,env,current) {
   const statements=[
     db(env).prepare(`INSERT OR IGNORE INTO brand_jobs (id,session_id,ip_hash,request_key,request_hash,status,phase,input_json,day,created_at,updated_at)
       SELECT ?,?,?,?,?,'queued','queued',?,?,?,?
-      WHERE (SELECT COUNT(*) FROM brand_jobs WHERE session_id = ? AND day = ?) < ?
-        AND (SELECT COUNT(*) FROM brand_jobs WHERE ip_hash = ? AND day = ?) < ?
-        AND (SELECT COUNT(*) FROM brand_jobs WHERE day = ?) < ?`).bind(id,current.id,ip,input.idempotencyKey,requestHash,JSON.stringify(input),today,time,time,current.id,today,bound.session,ip,today,bound.ip,today,bound.global),
+      WHERE ? = 1 OR ((SELECT COUNT(*) FROM brand_jobs WHERE session_id = ? AND day = ? AND ${publicQuotaSession}) < ?
+        AND (SELECT COUNT(*) FROM brand_jobs WHERE ip_hash = ? AND day = ? AND ${publicQuotaSession}) < ?
+        AND (SELECT COUNT(*) FROM brand_jobs WHERE day = ? AND ${publicQuotaSession}) < ?)`).bind(id,current.id,ip,input.idempotencyKey,requestHash,JSON.stringify(input),today,time,time,Number(unlimitedTrial(current)),current.id,today,bound.session,ip,today,bound.ip,today,bound.global),
     db(env).prepare("UPDATE brand_jobs SET status = 'cancelled', phase = 'cancelled', updated_at = ? WHERE session_id = ? AND id != ? AND status IN ('queued','analyzing','generating') AND EXISTS (SELECT 1 FROM brand_jobs WHERE id = ?)").bind(time,current.id,id,id),
   ];
   // D1 batch is transactional: quota reservation and superseding earlier jobs happen together.

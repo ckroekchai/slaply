@@ -16,6 +16,7 @@ import {canCookIngredients,ingredientSlotLabel,recipeBrief} from './ingredient-r
 import {createGenerationPreparation} from './generation-preparation.js';
 import {uploadIngredient} from './upload-ingredient.js';
 import {uploadValidationMessage,uploadAccept} from './upload-limits.js';
+import {trialQuota} from './trial-quota.js';
 const INGREDIENT_ICONS=[{Icon:Carrot,name:'แครอท'},{Icon:Egg,name:'ไข่'},{Icon:Pepper,name:'พริก'},{Icon:Jar,name:'น้ำผึ้ง'},{Icon:Leaf,name:'สมุนไพร'},{Icon:OrangeSlice,name:'ซิตรัส'}];
 const A='/assets/';
 const MOODS=[
@@ -46,6 +47,7 @@ export function App(){
  const scrollTimer=useRef(null),toastTimer=useRef(null),pourTimer=useRef(null),callbacks=useRef({}),runner=useRef(null),scrollLock=useRef(0);
  if(!preparation.current)preparation.current=createGenerationPreparation({onBusyChange:preparing=>setReading(preparing||pendingReads.current.size>0)});
  const allowDocuments=session?.uploads?.documents===true;
+ const trial=trialQuota(session);
  const count=ingredients.filter(Boolean).length,busy=job.phase==='cooking'||job.phase==='pouring',theme=themeMode==='auto'?timeTheme:themeMode;
  const isBoard=Number(result?.schemaVersion)>=6,canCook=canCookIngredients(ingredients);
  const inputLogo=ingredients.find(item=>item?.role==='logo');
@@ -103,7 +105,7 @@ export function App(){
  async function doShake(){
    if(job.phase==='error'&&job.jobId){runner.current.resume(job.jobId);return}
    if(!canCook||reading||preparation.current.active||!session)return;
-   if(session.remaining<=0||session.globalRemaining<=0){notify('ใช้รอบทดลองครบแล้ว กลับมาปรุงใหม่พรุ่งนี้');return}
+   if(!trial.canGenerate){notify('ใช้รอบทดลองครบแล้ว กลับมาปรุงใหม่พรุ่งนี้');return}
    restoringJob.current=false;
    await preparation.current.run(ingredients,{
      onPrepared(prepared){
@@ -135,7 +137,7 @@ export function App(){
  const status=kitchenStatus({count,job,hasResult:Boolean(result)});
  return <div className={`kitchen-app ${reduced?'reduce-motion':''}`} data-theme={theme}>
  <div className="app-content" inert={panel?true:undefined}>
- <header className="topbar"><a className="wordmark" href="#kitchen" aria-label="Slaply home">Slaply<Sparkle weight="fill" size={23}/></a><span className="kitchen-label">THE BRAND POT</span><div className="nav-tools"><button className="recipe-nav" aria-label="สูตรของฉัน" onClick={()=>setPanel('recipes')}><BookmarkSimple size={17}/><span>สูตรของฉัน</span>{recipes.length>0&&<em>{recipes.length}</em>}</button><button className="theme-toggle" onClick={()=>setTheme(theme==='day'?'night':'day')} aria-label={theme==='day'?'Switch to night theme':'Switch to day theme'} title={theme==='day'?'เปลี่ยนเป็นกลางคืน':'เปลี่ยนเป็นกลางวัน'}>{theme==='day'?<Moon size={19}/>:sizeIconSun()}</button><button className="credit-pill" onClick={()=>setPanel('system')} aria-label="สถานะ AI Beta และรอบทดลอง"><Sparkle size={17}/><b>AI Beta</b><span>{session?`${Math.min(session.remaining,session.globalRemaining)} รอบ`:'…'}</span></button></div></header>
+ <header className="topbar"><a className="wordmark" href="#kitchen" aria-label="Slaply home">Slaply<Sparkle weight="fill" size={23}/></a><span className="kitchen-label">THE BRAND POT</span><div className="nav-tools"><button className="recipe-nav" aria-label="สูตรของฉัน" onClick={()=>setPanel('recipes')}><BookmarkSimple size={17}/><span>สูตรของฉัน</span>{recipes.length>0&&<em>{recipes.length}</em>}</button><button className="theme-toggle" onClick={()=>setTheme(theme==='day'?'night':'day')} aria-label={theme==='day'?'Switch to night theme':'Switch to day theme'} title={theme==='day'?'เปลี่ยนเป็นกลางคืน':'เปลี่ยนเป็นกลางวัน'}>{theme==='day'?<Moon size={19}/>:sizeIconSun()}</button><button className="credit-pill" onClick={()=>setPanel('system')} aria-label="สถานะ AI Beta และรอบทดลอง"><Sparkle size={17}/><b>AI Beta</b><span>{trial.label}</span></button></div></header>
  <main id="kitchen">
  {connectionError&&<div className="connection-alert" role="alert"><span>{connectionError}</span><button onClick={()=>session?refreshSession().catch(()=>{}):setBootstrapAttempt(value=>value+1)}>เชื่อมต่ออีกครั้ง</button></div>}
  <section className="kitchen-hero"><div className="hero-copy"><span className="eyebrow">A LITTLE MIX. A LOT OF YOU.</span><h1>Good brands start<br className="mobile-break"/> with <span>good ingredients.</span></h1><p>ผสมภาพ 3–6 อย่าง ให้เราปรุงแบรนด์ที่เป็นคุณ</p></div>
@@ -157,7 +159,7 @@ export function App(){
  </section>
  <section className={`cooking-station ${busy?'is-cooking':''} ${pour?'is-pouring':''} ${dragging?'drop-ready':''}`} aria-label="หม้อสร้างแบรนด์" onDragOver={e=>{e.preventDefault();setDragging(true)}} onDragLeave={()=>setDragging(false)} onDrop={e=>{e.preventDefault();setDragging(false);const slot=ingredients[active]?ingredients.findIndex(x=>!x):active;if(slot>=0)upload(e.dataTransfer.files[0],slot);else notify('ครบ 6 วัตถุดิบแล้ว · ลบหรือเปลี่ยนส่วนผสมก่อน')}}>
  <div className="pot-stage"><aside className="pot-note pot-name-note"><label htmlFor="brand-name"><span>ชื่อแบรนด์</span><input id="brand-name" value={brief.name} maxLength={80} placeholder="ชื่อแบรนด์ชื่อสินค้า" onChange={e=>updateBrief('name',e.target.value)}/></label><ArrowRight className="note-arrow" size={26} weight="light" aria-hidden="true"/></aside><aside className="pot-note pot-message-note"><label htmlFor="brand-seasoning"><span>เติมรสชาติด้วยข้อความ</span><textarea id="brand-seasoning" value={brief.words} maxLength={600} placeholder="บรรยายความรู้สึกลงไป" rows={3} onChange={e=>updateBrief('words',e.target.value)}/></label></aside><div className="pot-assembly"><img className="pot-image" src={asset(A+'brand-pot.png')} alt="หม้อ Slaply สีคอรัล มองเห็นน้ำด้านบน"/><img className="pot-emblem" src={asset(A+'brand-pot-v3.png')} alt="" aria-hidden="true"/><PotLiquid busy={busy} reduced={reduced}/>{pour&&<div className="pour-trail" key={pour.id} aria-hidden="true"><img src={asset(pour.src)} alt=""/><Sparkle weight="fill"/><Sparkle weight="fill"/></div>}</div></div>
- <div className="cooking-controls"><button className="ready-result chef-button" onClick={()=>setPanel('chef')}><ChatCircleText size={17}/><span>อธิบายเชฟ</span></button><div className="cooking-status" role="status" aria-live="polite"><span className={`status-light ${busy?'pulsing':''}`}/>{reading?'กำลังเตรียมวัตถุดิบ…':status}</div><button className={`shake-button ${busy?'working':''}`} disabled={reading||(!job.jobId&&(!canCook||!session||session.remaining<=0||session.globalRemaining<=0))} onClick={doShake}><Sparkle size={20} weight="fill"/>{job.phase==='error'&&job.jobId?'ตรวจงานเดิมอีกครั้ง':busy?'Shake อีกครั้ง':'Shake my brand'}<span>{busy?'เริ่มรอบใหม่':'ทดลองฟรี'}</span></button>{busy&&<div className="below-shake"><span>การเปลี่ยนวัตถุดิบจะหยุดรอบนี้ · กด Shake เมื่อพร้อม</span><button onClick={stop}>หยุด</button></div>}</div>
+ <div className="cooking-controls"><button className="ready-result chef-button" onClick={()=>setPanel('chef')}><ChatCircleText size={17}/><span>อธิบายเชฟ</span></button><div className="cooking-status" role="status" aria-live="polite"><span className={`status-light ${busy?'pulsing':''}`}/>{reading?'กำลังเตรียมวัตถุดิบ…':status}</div><button className={`shake-button ${busy?'working':''}`} disabled={reading||(!job.jobId&&(!canCook||!trial.canGenerate))} onClick={doShake}><Sparkle size={20} weight="fill"/>{job.phase==='error'&&job.jobId?'ตรวจงานเดิมอีกครั้ง':busy?'Shake อีกครั้ง':'Shake my brand'}<span>{busy?'เริ่มรอบใหม่':'ทดลองฟรี'}</span></button>{busy&&<div className="below-shake"><span>การเปลี่ยนวัตถุดิบจะหยุดรอบนี้ · กด Shake เมื่อพร้อม</span><button onClick={stop}>หยุด</button></div>}</div>
  </section>
  </section>
  {result&&<section id="fresh-result" className={`fresh-result guideline-result ${busy?'updating':''}`}><div className="guideline-header"><div className="concept-copy"><span className="eyebrow">YOUR BRAND CONCEPT</span><h2 id="result-title" tabIndex={-1}>{concept.title}</h2><p>{concept.summary}</p></div><div className="guideline-actions"><button className={`keep-button ${isSaved?'is-saved':''}`} disabled={saving||isSaved} onClick={()=>save().catch(()=>{})}><BookmarkSimple size={17} weight={isSaved?'fill':'regular'} color={isSaved?'#000000':undefined}/>{saving?'กำลังเก็บ…':isSaved?'เก็บสูตรแล้ว':'เก็บสูตรนี้'}</button><button className="download-button" onClick={()=>setPanel('export')}><Receipt size={18}/>ดาวน์โหลด<ArrowRight size={17}/></button></div></div>
