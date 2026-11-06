@@ -125,7 +125,9 @@ export async function verifyBoardArtifacts({ png, pdf, scene, logo, logoReferenc
         // rather than assuming a single panel also covers neighboring gutters.
         const layers=[...prior].reverse();
         const backgroundAt=(px,py)=>{
-          for(const layer of layers){const b=layer.bounds;if(px<b.x||px>=b.x+b.w||py<b.y||py>=b.y+b.h)continue;
+          for(const layer of layers){const b=layer.bounds;
+            if(layer.type==='rect'&&layer.stroke&&px>=b.x-2&&px<=b.x+b.w+2&&py>=b.y-2&&py<=b.y+b.h+2&&Math.min(Math.abs(px-b.x),Math.abs(px-b.x-b.w),Math.abs(py-b.y),Math.abs(py-b.y-b.h))<=2)return null;
+            if(px<b.x||px>=b.x+b.w||py<b.y||py>=b.y+b.h)continue;
             if(layer.type!=='rect'||!hex(layer.fill))return null;
             const r=layer.radius||0;if(Math.min(px-b.x,b.x+b.w-px,py-b.y,b.y+b.h-py)<2)return null;
             if(r&&((px<b.x+r||px>b.x+b.w-r)&&(py<b.y+r||py>b.y+b.h-r)))return null;
